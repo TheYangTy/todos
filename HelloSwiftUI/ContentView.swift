@@ -7,6 +7,7 @@ struct ContentView: View {
     
     @State private var isPresentingAddSheet = false
     @State private var isShowingManageLists = false
+    @State private var isShowingFilterSheet = false
     
     @State private var newTitle: String = ""
     @State private var newDueDate: Date = Date()
@@ -22,6 +23,10 @@ struct ContentView: View {
     // 自定义日期范围
     @State private var customStartDate: Date = Date()
     @State private var customEndDate: Date = Date()
+    
+    // 详情页导航用：选中的 Todo
+    @State private var selectedTodoID: UUID?
+    @State private var isShowingDetail: Bool = false
     
     @AppStorage("sortOption") private var sortOptionRaw: String = SortOption.priority.rawValue
     @AppStorage("showCompleted") private var showCompleted: Bool = true
@@ -93,7 +98,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             List {
-                // 清单筛选
+                // 1️⃣ 清单放在最上方
                 Section("清单") {
                     Picker("清单", selection: $selectedFilter) {
                         Text("全部").tag(ListFilter.all)
@@ -104,36 +109,17 @@ struct ContentView: View {
                     .pickerStyle(.segmented)
                 }
                 
-                // 排序方式
-                Section("排序") {
-                    Picker("排序方式", selection: $sortOptionRaw) {
-                        ForEach(SortOption.allCases) { option in
-                            Text(option.displayName).tag(option.rawValue)
-                        }
+                // 2️⃣ 新增待办事项放第二个
+                Section {
+                    Button {
+                        prepareForNewTodo()
+                        isPresentingAddSheet = true
+                    } label: {
+                        Label("新增待办事项", systemImage: "plus.circle")
                     }
                 }
                 
-                // 日期筛选（全部 / 今天 / 自定义范围）
-                Section("日期") {
-                    Picker("日期范围", selection: $dateFilter) {
-                        ForEach(DateFilter.allCases) { filter in
-                            Text(filter.displayName).tag(filter)
-                        }
-                    }
-                    
-                    if dateFilter == .range {
-                        DatePicker("开始日期",
-                                   selection: $customStartDate,
-                                   displayedComponents: .date)
-                        
-                        DatePicker("结束日期",
-                                   selection: $customEndDate,
-                                   in: customStartDate...,
-                                   displayedComponents: .date)
-                    }
-                }
-                
-                // 今日统计（仅在“今天”筛选下展示）
+                // 3️⃣ 仅在“今天”筛选时显示统计信息
                 if dateFilter == .today {
                     Section {
                         let stats = todayStats
@@ -143,9 +129,9 @@ struct ContentView: View {
                     }
                 }
                 
-                // 待完成
+                // 4️⃣ 待完成（带数量）
                 if !incompleteIndices.isEmpty {
-                    Section("待完成") {
+                    Section {
                         ForEach(incompleteIndices, id: \.self) { idx in
                             let listName = nameForList(id: data.todos[idx].listId)
                             
@@ -155,6 +141,10 @@ struct ContentView: View {
                                 lists: data.lists,
                                 onToggleDone: {
                                     toggleDone(at: idx)
+                                },
+                                onTapDetail: {
+                                    selectedTodoID = data.todos[idx].id
+                                    isShowingDetail = true
                                 }
                             )
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -173,12 +163,20 @@ struct ContentView: View {
                                 }
                             }
                         }
+                    } header: {
+                        HStack {
+                            Text("待完成")
+                            Spacer()
+                            Text("\(incompleteIndices.count) 项")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 
-                // 已完成
+                // 5️⃣ 已完成（带数量）
                 if showCompleted, !completedIndices.isEmpty {
-                    Section("已完成") {
+                    Section {
                         ForEach(completedIndices, id: \.self) { idx in
                             let listName = nameForList(id: data.todos[idx].listId)
                             
@@ -188,6 +186,10 @@ struct ContentView: View {
                                 lists: data.lists,
                                 onToggleDone: {
                                     toggleDone(at: idx)
+                                },
+                                onTapDetail: {
+                                    selectedTodoID = data.todos[idx].id
+                                    isShowingDetail = true
                                 }
                             )
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -206,20 +208,18 @@ struct ContentView: View {
                                 }
                             }
                         }
+                    } header: {
+                        HStack {
+                            Text("已完成")
+                            Spacer()
+                            Text("\(completedIndices.count) 项")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 
-                // 新增待办事项
-                Section {
-                    Button {
-                        prepareForNewTodo()
-                        isPresentingAddSheet = true
-                    } label: {
-                        Label("新增待办事项", systemImage: "plus.circle")
-                    }
-                }
-                
-                // 更多（这里只保留回收站，去掉首页“管理清单”入口）
+                // 6️⃣ 更多（只保留回收站，放在最底部）
                 Section("更多") {
                     NavigationLink {
                         TrashView(todos: $data.todos, lists: data.lists)
@@ -234,6 +234,15 @@ struct ContentView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     EditButton()
                 }
+                // 筛选按钮（排序 + 日期）放在右上角
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        isShowingFilterSheet = true
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                    }
+                    .accessibilityLabel("筛选与排序")
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink {
                         SettingsView(openManageLists: {
@@ -247,7 +256,11 @@ struct ContentView: View {
             .sheet(isPresented: $isPresentingAddSheet) {
                 addTodoSheet
             }
-            // 这里仍然保留从设置跳转的“管理清单”入口
+            // 筛选与排序的 Sheet
+            .sheet(isPresented: $isShowingFilterSheet) {
+                filterSheet
+            }
+            // 从设置页跳转到管理清单
             .navigationDestination(isPresented: $isShowingManageLists) {
                 ManageListsView(lists: $data.lists) { deletedListId in
                     if let firstId = data.lists.first?.id {
@@ -257,6 +270,15 @@ struct ContentView: View {
                             }
                         }
                     }
+                }
+            }
+            // 详情页导航：通过选中的 ID 找 Binding
+            .navigationDestination(isPresented: $isShowingDetail) {
+                if let id = selectedTodoID,
+                   let binding = bindingForTodo(id: id) {
+                    TodoEditView(todo: binding, lists: data.lists)
+                } else {
+                    Text("找不到该待办事项")
                 }
             }
             .searchable(text: $searchText)
@@ -370,6 +392,50 @@ struct ContentView: View {
         }
     }
     
+    // MARK: - 筛选 & 排序 Sheet
+    
+    private var filterSheet: some View {
+        NavigationStack {
+            Form {
+                Section("排序方式") {
+                    Picker("排序方式", selection: $sortOptionRaw) {
+                        ForEach(SortOption.allCases) { option in
+                            Text(option.displayName).tag(option.rawValue)
+                        }
+                    }
+                }
+                
+                Section("日期范围") {
+                    Picker("日期范围", selection: $dateFilter) {
+                        ForEach(DateFilter.allCases) { filter in
+                            Text(filter.displayName).tag(filter)
+                        }
+                    }
+                    
+                    if dateFilter == .range {
+                        DatePicker("开始日期",
+                                   selection: $customStartDate,
+                                   displayedComponents: .date)
+                        
+                        DatePicker("结束日期",
+                                   selection: $customEndDate,
+                                   in: customStartDate...,
+                                   displayedComponents: .date)
+                    }
+                }
+            }
+            .navigationTitle("筛选与排序")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") {
+                        isShowingFilterSheet = false
+                    }
+                }
+            }
+        }
+    }
+    
     // MARK: - 过滤 & 排序
     
     private func matchesSearch(_ todo: TodoItem) -> Bool {
@@ -473,6 +539,15 @@ struct ContentView: View {
         }
         let done = allToday.filter { $0.isDone }.count
         return (total: allToday.count, done: done)
+    }
+    
+    // MARK: - Binding 辅助
+    
+    private func bindingForTodo(id: UUID) -> Binding<TodoItem>? {
+        guard let index = data.todos.firstIndex(where: { $0.id == id }) else {
+            return nil
+        }
+        return $data.todos[index]
     }
     
     // MARK: - 操作逻辑

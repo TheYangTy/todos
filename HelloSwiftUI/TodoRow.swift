@@ -5,6 +5,7 @@ struct TodoRow: View {
     let listName: String
     let lists: [TodoList]
     let onToggleDone: () -> Void
+    let onTapDetail: () -> Void
     
     private var isOverdue: Bool {
         guard let due = todo.dueDate, !todo.isDone else { return false }
@@ -32,6 +33,7 @@ struct TodoRow: View {
     
     var body: some View {
         HStack(spacing: 12) {
+            // 左侧完成圆点
             Image(systemName: todo.isDone ? "checkmark.circle.fill" : "circle")
                 .foregroundStyle(isOverdue ? .red : (todo.isDone ? .green : .gray))
                 .imageScale(.large)
@@ -39,30 +41,30 @@ struct TodoRow: View {
                     onToggleDone()
                 }
             
-            NavigationLink {
-                TodoEditView(todo: $todo, lists: lists)
-            } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(todo.title)
-                            .foregroundStyle(isOverdue ? .red : .primary)
-                            .lineLimit(1)
-                        
-                        Text(subtitle)
-                            .font(.footnote)
-                            .foregroundStyle(isOverdue ? .red.opacity(0.8) : .secondary)
-                            .lineLimit(1)
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(.tertiary)
-                        .imageScale(.small)
-                }
+            // 中间标题 + 副标题
+            VStack(alignment: .leading, spacing: 4) {
+                Text(todo.title)
+                    .foregroundStyle(isOverdue ? .red : .primary)
+                    .font(.body)
+                    .lineLimit(1)
+                
+                Text(subtitle)
+                    .font(.footnote)
+                    .foregroundStyle(isOverdue ? .red.opacity(0.8) : .secondary)
+                    .lineLimit(1)
             }
+            
+            Spacer()
+            
+            // 右侧自定义箭头（唯一的箭头）
+            Image(systemName: "chevron.right")
+                .foregroundStyle(.tertiary)
+                .imageScale(.small)
         }
-        .contentShape(Rectangle())
+        .contentShape(Rectangle())                // 整行可点击
+        .onTapGesture {
+            onTapDetail()
+        }
     }
 }
 
@@ -71,7 +73,7 @@ struct TodoRow: View {
     let item = TodoItem(
         title: "预览事项",
         isDone: false,
-        dueDate: Calendar.current.date(byAdding: .day, value: -1, to: Date()),
+        dueDate: Calendar.current.date(byAdding: .day, value: 1, to: Date()),
         priority: .high,
         listId: list.id
     )
@@ -82,7 +84,8 @@ struct TodoRow: View {
                 todo: .constant(item),
                 listName: list.name,
                 lists: [list],
-                onToggleDone: {}
+                onToggleDone: {},
+                onTapDetail: {}
             )
         }
         .listStyle(.insetGrouped)
