@@ -1,24 +1,38 @@
 import Foundation
 
 struct TodoItem: Identifiable, Codable, Equatable {
-    enum Priority: String, Codable, CaseIterable, Identifiable {
-        case low
-        case medium
+    // 放在前面，方便 memberwise init 提供默认值
+    var id: UUID = UUID()
+    var title: String
+    var isDone: Bool = false
+    var dueDate: Date? = nil
+    var priority: Priority
+    var listId: UUID
+    var deletedAt: Date? = nil
+    var repeatRule: RepeatRule = .none
+    
+    /// ✅ 新增：提醒时间（仅在有截止日期时可设置，为截止日当天某个时刻）
+    var reminderTime: Date? = nil
+
+    // 优先级
+    enum Priority: String, CaseIterable, Identifiable, Codable {
         case high
+        case medium
+        case low
         
         var id: Self { self }
         
         var displayName: String {
             switch self {
-            case .low: return "低"
+            case .high:   return "高"
             case .medium: return "中"
-            case .high: return "高"
+            case .low:    return "低"
             }
         }
     }
     
     // 重复规则
-    enum RepeatRule: String, Codable, CaseIterable, Identifiable {
+    enum RepeatRule: String, CaseIterable, Identifiable, Codable {
         case none
         case daily
         case weekly
@@ -34,33 +48,5 @@ struct TodoItem: Identifiable, Codable, Equatable {
             case .monthly: return "每月"
             }
         }
-    }
-    
-    let id: UUID
-    var title: String
-    var isDone: Bool
-    var dueDate: Date?
-    var priority: Priority
-    var listId: UUID
-    var deletedAt: Date?      // 回收站时间
-    var repeatRule: RepeatRule
-    
-    init(id: UUID = UUID(),
-         title: String,
-         isDone: Bool = false,
-         dueDate: Date? = nil,
-         priority: Priority = .medium,
-         listId: UUID,
-         deletedAt: Date? = nil,
-         repeatRule: RepeatRule = .none) {
-        
-        self.id = id
-        self.title = title
-        self.isDone = isDone
-        self.dueDate = dueDate
-        self.priority = priority
-        self.listId = listId
-        self.deletedAt = deletedAt
-        self.repeatRule = repeatRule
     }
 }

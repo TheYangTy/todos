@@ -6,62 +6,100 @@ struct TodoRow: View {
     let lists: [TodoList]
     let onToggleDone: () -> Void
     let onTapDetail: () -> Void
-    
+
+    // 读取用户自定义的优先级颜色（默认：高=红，中=橙，低=绿）
+    @AppStorage("priorityColorHigh")  private var priorityHighColorRaw: String  = PriorityColorOption.red.rawValue
+    @AppStorage("priorityColorMedium") private var priorityMediumColorRaw: String = PriorityColorOption.orange.rawValue
+    @AppStorage("priorityColorLow")   private var priorityLowColorRaw: String   = PriorityColorOption.green.rawValue
+
     private var isOverdue: Bool {
         guard let due = todo.dueDate, !todo.isDone else { return false }
         let today = Calendar.current.startOfDay(for: Date())
         let dueDay = Calendar.current.startOfDay(for: due)
         return dueDay < today
     }
-    
-    private var subtitle: String {
-        var parts: [String] = []
-        parts.append("清单：\(listName)")
-        
-        if let due = todo.dueDate {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .none
-            
-            let prefix = isOverdue ? "已超期：" : "截止 "
-            parts.append(prefix + formatter.string(from: due))
+
+    /// 优先级圆点颜色（使用设置里的配置）
+    private var priorityDotColor: Color {
+        let raw: String
+        switch todo.priority {
+        case .high:
+            raw = priorityHighColorRaw
+        case .medium:
+            raw = priorityMediumColorRaw
+        case .low:
+            raw = priorityLowColorRaw
         }
-        
-        parts.append("优先级：\(todo.priority.displayName)")
-        return parts.joined(separator: " · ")
+        return PriorityColorOption(rawValue: raw)?.color ?? .orange
     }
-    
+
+    /// 截止日期文案（不加“清单 / 优先级”字眼）
+    private var dueDateText: String? {
+        guard let due = todo.dueDate else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+
+        let dateString = formatter.string(from: due)
+        if isOverdue {
+            return "已超期 · \(dateString)"
+        } else if Calendar.current.isDateInToday(due) {
+            return "今天 · \(dateString)"
+        } else {
+            return "截止 \(dateString)"
+        }
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            // 左侧完成圆点
+            // 左侧完成圆圈
             Image(systemName: todo.isDone ? "checkmark.circle.fill" : "circle")
                 .foregroundStyle(isOverdue ? .red : (todo.isDone ? .green : .gray))
                 .imageScale(.large)
                 .onTapGesture {
                     onToggleDone()
                 }
-            
-            // 中间标题 + 副标题
+
+            // 中间：标题 + 一行详情
             VStack(alignment: .leading, spacing: 4) {
+                // 标题
                 Text(todo.title)
                     .foregroundStyle(isOverdue ? .red : .primary)
                     .font(.body)
                     .lineLimit(1)
-                
-                Text(subtitle)
-                    .font(.footnote)
-                    .foregroundStyle(isOverdue ? .red.opacity(0.8) : .secondary)
-                    .lineLimit(1)
+
+                // 详情行：优先级圆点 + 清单名 + 截止日期（全部同一行）
+                HStack(spacing: 6) {
+                    // 优先级圆点（无文字）
+                    Circle()
+                        .fill(priorityDotColor)
+                        .frame(width: 8, height: 8)
+
+                    // 清单名（不再显示“清单：”字眼）
+                    Text(listName)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    if let text = dueDateText {
+                        Text("· \(text)")
+                            .font(.caption2)
+                            .foregroundStyle(isOverdue ? .red.opacity(0.85) : .secondary)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .lineLimit(1)
+                .truncationMode(.tail)
             }
-            
+
             Spacer()
-            
+
             // 右侧自定义箭头（唯一的箭头）
             Image(systemName: "chevron.right")
                 .foregroundStyle(.tertiary)
                 .imageScale(.small)
         }
-        .contentShape(Rectangle())                // 整行可点击
+        .contentShape(Rectangle())  // 整行可点击
         .onTapGesture {
             onTapDetail()
         }
@@ -69,15 +107,15 @@ struct TodoRow: View {
 }
 
 #Preview {
-    let list = TodoList(name: "收件箱")
+    let list = TodoList(name: "工作")
     let item = TodoItem(
-        title: "预览事项",
+        title: "预览事项：写 iOS todos App",
         isDone: false,
         dueDate: Calendar.current.date(byAdding: .day, value: 1, to: Date()),
         priority: .high,
         listId: list.id
     )
-    
+
     return NavigationStack {
         List {
             TodoRow(

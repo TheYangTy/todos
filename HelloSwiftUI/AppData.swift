@@ -14,6 +14,7 @@ struct AppData: Codable, Equatable {
     var lists: [TodoList]
     var todos: [TodoItem]
     
+    /// 本地 & iCloud 共享使用的 Key（保持不变，防止旧数据丢失）
     static let storageKey = "AppData_v1_lists_dynamic"
     
     // 使用 App Group 的 UserDefaults（给 App + Widget 共享）
@@ -34,15 +35,21 @@ struct AppData: Codable, Equatable {
         return AppData(
             lists: [inbox, work, life],
             todos: [
-                TodoItem(title: "学习 Swift 基础语法",
-                         priority: .medium,
-                         listId: inbox.id),
-                TodoItem(title: "看一遍 SwiftUI 教程",
-                         priority: .medium,
-                         listId: inbox.id),
-                TodoItem(title: "完成第一个 iOS App",
-                         priority: .high,
-                         listId: work.id)
+                TodoItem(
+                    title: "学习 Swift 基础语法",
+                    priority: .medium,
+                    listId: inbox.id
+                ),
+                TodoItem(
+                    title: "看一遍 SwiftUI 教程",
+                    priority: .medium,
+                    listId: inbox.id
+                ),
+                TodoItem(
+                    title: "完成第一个 iOS App",
+                    priority: .high,
+                    listId: work.id
+                )
             ]
         )
     }

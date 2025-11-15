@@ -4,47 +4,51 @@ import WidgetKit
 
 struct ContentView: View {
     @State private var data: AppData
-    
+
     @State private var isPresentingAddSheet = false
-    @State private var isShowingManageLists = false
     @State private var isShowingFilterSheet = false
-    
+
     @State private var newTitle: String = ""
     @State private var newDueDate: Date = Date()
     @State private var newHasDueDate: Bool = false
     @State private var newPriority: TodoItem.Priority = .medium
     @State private var newRepeatRule: TodoItem.RepeatRule = .none
     @State private var newListId: UUID?
-    
+
     @State private var searchText: String = ""
     @State private var selectedFilter: ListFilter = .all
     @State private var dateFilter: DateFilter = .all
-    
-    // 自定义日期范围
+
+    // 自定义日期范围（列表筛选用）
     @State private var customStartDate: Date = Date()
     @State private var customEndDate: Date = Date()
-    
+
     // 详情页导航用：选中的 Todo
     @State private var selectedTodoID: UUID?
     @State private var isShowingDetail: Bool = false
-    
+
     @AppStorage("sortOption") private var sortOptionRaw: String = SortOption.priority.rawValue
     @AppStorage("showCompleted") private var showCompleted: Bool = true
     @AppStorage("defaultPriority") private var defaultPriorityRaw: String = TodoItem.Priority.medium.rawValue
     @AppStorage("enableNotifications") private var enableNotifications: Bool = false
     @AppStorage("enableICloudSync") private var enableICloudSync: Bool = false
-    
+
+    // 角标相关设置
+    @AppStorage("badgeMode") private var badgeModeRaw: String = BadgeMode.today.rawValue
+    @AppStorage("badgeRangeStart") private var badgeRangeStartTime: Double = Date().timeIntervalSince1970
+    @AppStorage("badgeRangeEnd") private var badgeRangeEndTime: Double = Date().timeIntervalSince1970
+
     @EnvironmentObject var quickActions: QuickActionCenter
-    
+
     // MARK: - 内部枚举
-    
+
     enum SortOption: String, CaseIterable, Identifiable {
         case priority
         case dueDate
         case title
-        
+
         var id: Self { self }
-        
+
         var displayName: String {
             switch self {
             case .priority: return "优先级"
@@ -53,19 +57,19 @@ struct ContentView: View {
             }
         }
     }
-    
+
     enum ListFilter: Hashable {
         case all
         case list(UUID)
     }
-    
+
     enum DateFilter: String, CaseIterable, Identifiable {
         case all
         case today
         case range
-        
+
         var id: Self { self }
-        
+
         var displayName: String {
             switch self {
             case .all:   return "全部日期"
@@ -74,17 +78,29 @@ struct ContentView: View {
             }
         }
     }
-    
+
     private var sortOption: SortOption {
         SortOption(rawValue: sortOptionRaw) ?? .priority
     }
-    
+
     private var defaultPriority: TodoItem.Priority {
         TodoItem.Priority(rawValue: defaultPriorityRaw) ?? .medium
     }
-    
+
+    private var badgeMode: BadgeMode {
+        BadgeMode(rawValue: badgeModeRaw) ?? .today
+    }
+
+    private var badgeRangeStartDate: Date {
+        Date(timeIntervalSince1970: badgeRangeStartTime)
+    }
+
+    private var badgeRangeEndDate: Date {
+        Date(timeIntervalSince1970: badgeRangeEndTime)
+    }
+
     // MARK: - 初始化
-    
+
     init() {
         if let local = AppData.loadFromLocal() {
             _data = State(initialValue: local)
@@ -92,13 +108,13 @@ struct ContentView: View {
             _data = State(initialValue: AppData.initial())
         }
     }
-    
+
     // MARK: - View
-    
+
     var body: some View {
         NavigationStack {
             List {
-                // 1️⃣ 清单放在最上方
+                // 清单选择
                 Section("清单") {
                     Picker("清单", selection: $selectedFilter) {
                         Text("全部").tag(ListFilter.all)
@@ -108,8 +124,8 @@ struct ContentView: View {
                     }
                     .pickerStyle(.segmented)
                 }
-                
-                // 2️⃣ 新增待办事项放第二个
+
+                // 新增待办
                 Section {
                     Button {
                         prepareForNewTodo()
@@ -118,8 +134,8 @@ struct ContentView: View {
                         Label("新增待办事项", systemImage: "plus.circle")
                     }
                 }
-                
-                // 3️⃣ 仅在“今天”筛选时显示统计信息
+
+                // 今天统计
                 if dateFilter == .today {
                     Section {
                         let stats = todayStats
@@ -128,13 +144,13 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                
-                // 4️⃣ 待完成（带数量）
+
+                // 待完成（带数量）
                 if !incompleteIndices.isEmpty {
                     Section {
                         ForEach(incompleteIndices, id: \.self) { idx in
                             let listName = nameForList(id: data.todos[idx].listId)
-                            
+
                             TodoRow(
                                 todo: $data.todos[idx],
                                 listName: listName,
@@ -173,13 +189,13 @@ struct ContentView: View {
                         }
                     }
                 }
-                
-                // 5️⃣ 已完成（带数量）
+
+                // 已完成（带数量）
                 if showCompleted, !completedIndices.isEmpty {
                     Section {
                         ForEach(completedIndices, id: \.self) { idx in
                             let listName = nameForList(id: data.todos[idx].listId)
-                            
+
                             TodoRow(
                                 todo: $data.todos[idx],
                                 listName: listName,
@@ -218,8 +234,8 @@ struct ContentView: View {
                         }
                     }
                 }
-                
-                // 6️⃣ 更多（只保留回收站，放在最底部）
+
+                // 更多
                 Section("更多") {
                     NavigationLink {
                         TrashView(todos: $data.todos, lists: data.lists)
@@ -234,7 +250,7 @@ struct ContentView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     EditButton()
                 }
-                // 筛选按钮（排序 + 日期）放在右上角
+                // 筛选按钮
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         isShowingFilterSheet = true
@@ -243,11 +259,22 @@ struct ContentView: View {
                     }
                     .accessibilityLabel("筛选与排序")
                 }
+                // 设置入口（这里不再负责“管理清单”的跳转）
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink {
-                        SettingsView(openManageLists: {
-                            isShowingManageLists = true
-                        })
+                        SettingsView(
+                            lists: $data.lists,
+                            onListDeleted: { deletedListId in
+                                // 如果清单被删，将属于该清单的任务归到第一个清单
+                                if let firstId = data.lists.first?.id {
+                                    for idx in data.todos.indices {
+                                        if data.todos[idx].listId == deletedListId {
+                                            data.todos[idx].listId = firstId
+                                        }
+                                    }
+                                }
+                            }
+                        )
                     } label: {
                         Image(systemName: "gearshape")
                     }
@@ -256,21 +283,8 @@ struct ContentView: View {
             .sheet(isPresented: $isPresentingAddSheet) {
                 addTodoSheet
             }
-            // 筛选与排序的 Sheet
             .sheet(isPresented: $isShowingFilterSheet) {
                 filterSheet
-            }
-            // 从设置页跳转到管理清单
-            .navigationDestination(isPresented: $isShowingManageLists) {
-                ManageListsView(lists: $data.lists) { deletedListId in
-                    if let firstId = data.lists.first?.id {
-                        for idx in data.todos.indices {
-                            if data.todos[idx].listId == deletedListId {
-                                data.todos[idx].listId = firstId
-                            }
-                        }
-                    }
-                }
             }
             // 详情页导航：通过选中的 ID 找 Binding
             .navigationDestination(isPresented: $isShowingDetail) {
@@ -284,28 +298,27 @@ struct ContentView: View {
             .searchable(text: $searchText)
             .onChange(of: data) { _ in
                 purgeOldTrashIfNeeded()
-                
-                // 保存
+
+                // 本地 & iCloud 存储
                 AppData.saveToLocal(data)
                 if enableICloudSync {
                     AppData.saveToICloud(data)
                 }
-                
+
                 // 通知
                 let active = data.todos.filter { $0.deletedAt == nil }
                 NotificationManager.shared.syncNotifications(for: active,
                                                              enabled: enableNotifications)
-                
-                // 角标
-                let badgeCount = data.todos.filter { $0.deletedAt == nil && !$0.isDone }.count
-                UIApplication.shared.applicationIconBadgeNumber = badgeCount
-                
+
+                // 角标（根据设置计算）
+                UIApplication.shared.applicationIconBadgeNumber = computeBadgeCount()
+
                 // Widget 刷新
                 WidgetCenter.shared.reloadTimelines(ofKind: "TodosWidget")
             }
             .onAppear {
                 purgeOldTrashIfNeeded()
-                
+
                 NotificationCenter.default.addObserver(
                     forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
                     object: NSUbiquitousKeyValueStore.default,
@@ -315,9 +328,9 @@ struct ContentView: View {
                           let fromCloud = AppData.loadFromICloud() else { return }
                     data = fromCloud
                 }
-                
+
                 NSUbiquitousKeyValueStore.default.synchronize()
-                
+
                 handleQuickActionIfNeeded()
             }
             .onChange(of: quickActions.lastAction) { _ in
@@ -325,16 +338,16 @@ struct ContentView: View {
             }
         }
     }
-    
+
     // MARK: - 新增 Sheet
-    
+
     private var addTodoSheet: some View {
         NavigationStack {
             Form {
                 Section("标题") {
                     TextField("请输入待办事项", text: $newTitle)
                 }
-                
+
                 Section("清单") {
                     Picker("所属清单", selection: Binding(
                         get: { newListId ?? data.lists.first?.id ?? UUID() },
@@ -345,17 +358,17 @@ struct ContentView: View {
                         }
                     }
                 }
-                
+
                 Section("截止日期") {
                     Toggle("设置截止日期", isOn: $newHasDueDate)
-                    
+
                     if newHasDueDate {
                         DatePicker("日期",
                                    selection: $newDueDate,
                                    displayedComponents: .date)
                     }
                 }
-                
+
                 Section("优先级") {
                     Picker("优先级", selection: $newPriority) {
                         ForEach(TodoItem.Priority.allCases) { level in
@@ -364,7 +377,7 @@ struct ContentView: View {
                     }
                     .pickerStyle(.segmented)
                 }
-                
+
                 Section("重复") {
                     Picker("重复", selection: $newRepeatRule) {
                         ForEach(TodoItem.RepeatRule.allCases) { rule in
@@ -391,9 +404,9 @@ struct ContentView: View {
             }
         }
     }
-    
+
     // MARK: - 筛选 & 排序 Sheet
-    
+
     private var filterSheet: some View {
         NavigationStack {
             Form {
@@ -404,19 +417,19 @@ struct ContentView: View {
                         }
                     }
                 }
-                
+
                 Section("日期范围") {
                     Picker("日期范围", selection: $dateFilter) {
                         ForEach(DateFilter.allCases) { filter in
                             Text(filter.displayName).tag(filter)
                         }
                     }
-                    
+
                     if dateFilter == .range {
                         DatePicker("开始日期",
                                    selection: $customStartDate,
                                    displayedComponents: .date)
-                        
+
                         DatePicker("结束日期",
                                    selection: $customEndDate,
                                    in: customStartDate...,
@@ -435,16 +448,16 @@ struct ContentView: View {
             }
         }
     }
-    
-    // MARK: - 过滤 & 排序
-    
+
+    // MARK: - 过滤 & 排序逻辑
+
     private func matchesSearch(_ todo: TodoItem) -> Bool {
         let text = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return true }
         let lower = text.lowercased()
         return todo.title.lowercased().contains(lower)
     }
-    
+
     private func matchesListFilter(_ todo: TodoItem) -> Bool {
         switch selectedFilter {
         case .all:
@@ -453,7 +466,7 @@ struct ContentView: View {
             return todo.listId == id
         }
     }
-    
+
     private func matchesDateFilter(_ todo: TodoItem) -> Bool {
         switch dateFilter {
         case .all:
@@ -470,7 +483,7 @@ struct ContentView: View {
             return day >= startDay && day <= endDay
         }
     }
-    
+
     private func orderedIndices(completed: Bool) -> [Int] {
         let base = data.todos.indices.filter {
             data.todos[$0].deletedAt == nil &&
@@ -479,18 +492,18 @@ struct ContentView: View {
             matchesListFilter(data.todos[$0]) &&
             matchesDateFilter(data.todos[$0])
         }
-        
+
         return base.sorted { lhs, rhs in
             let a = data.todos[lhs]
             let b = data.todos[rhs]
-            
+
             switch sortOption {
             case .priority:
                 let order: [TodoItem.Priority: Int] = [.high: 0, .medium: 1, .low: 2]
                 let pa = order[a.priority] ?? 1
                 let pb = order[b.priority] ?? 1
                 if pa != pb { return pa < pb }
-                
+
                 switch (a.dueDate, b.dueDate) {
                 case let (da?, db?):
                     if da != db { return da < db }
@@ -501,7 +514,7 @@ struct ContentView: View {
                 default: break
                 }
                 return a.title < b.title
-                
+
             case .dueDate:
                 switch (a.dueDate, b.dueDate) {
                 case let (da?, db?):
@@ -517,21 +530,21 @@ struct ContentView: View {
                 let pb = order[b.priority] ?? 1
                 if pa != pb { return pa < pb }
                 return a.title < b.title
-                
+
             case .title:
                 return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
             }
         }
     }
-    
+
     private var incompleteIndices: [Int] {
         orderedIndices(completed: false)
     }
-    
+
     private var completedIndices: [Int] {
         orderedIndices(completed: true)
     }
-    
+
     private var todayStats: (total: Int, done: Int) {
         let allToday = data.todos.filter { todo in
             guard let due = todo.dueDate, todo.deletedAt == nil else { return false }
@@ -540,22 +553,51 @@ struct ContentView: View {
         let done = allToday.filter { $0.isDone }.count
         return (total: allToday.count, done: done)
     }
-    
+
+    // MARK: - 角标统计
+
+    private func computeBadgeCount() -> Int {
+        // 未删除且未完成的任务
+        let active = data.todos.filter { $0.deletedAt == nil && !$0.isDone }
+
+        switch badgeMode {
+        case .all:
+            return active.count
+
+        case .today:
+            return active.filter { todo in
+                guard let due = todo.dueDate else { return false }
+                return Calendar.current.isDateInToday(due)
+            }.count
+
+        case .range:
+            let cal = Calendar.current
+            let startDay = cal.startOfDay(for: badgeRangeStartDate)
+            let endDay = cal.startOfDay(for: badgeRangeEndDate)
+
+            return active.filter { todo in
+                guard let due = todo.dueDate else { return false }
+                let day = cal.startOfDay(for: due)
+                return day >= startDay && day <= endDay
+            }.count
+        }
+    }
+
     // MARK: - Binding 辅助
-    
+
     private func bindingForTodo(id: UUID) -> Binding<TodoItem>? {
         guard let index = data.todos.firstIndex(where: { $0.id == id }) else {
             return nil
         }
         return $data.todos[index]
     }
-    
+
     // MARK: - 操作逻辑
-    
+
     private func nameForList(id: UUID) -> String {
         data.lists.first(where: { $0.id == id })?.name ?? "未知清单"
     }
-    
+
     private func prepareForNewTodo() {
         newTitle = ""
         newHasDueDate = false
@@ -571,14 +613,14 @@ struct ContentView: View {
             }
         }()
     }
-    
+
     private func addTodo() {
         guard let listId = newListId ?? data.lists.first?.id else { return }
         let trimmed = newTitle.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-        
+
         let due: Date? = newHasDueDate ? newDueDate : nil
-        
+
         let item = TodoItem(
             title: trimmed,
             isDone: false,
@@ -591,28 +633,39 @@ struct ContentView: View {
         data.todos.append(item)
         isPresentingAddSheet = false
     }
-    
+
     private func toggleDone(at index: Int) {
         let newValue = !data.todos[index].isDone
         markDone(at: index, done: newValue)
     }
-    
+
     private func markDone(at index: Int, done: Bool) {
         let item = data.todos[index]
         data.todos[index].isDone = done
-        
+
         guard done,
               item.repeatRule != .none,
               let due = item.dueDate else { return }
-        
+
         // 避免过期很久的任务生成一堆未来任务
         if let days = Calendar.current.dateComponents([.day], from: due, to: Date()).day,
            days > 7 {
             return
         }
-        
+
         guard let nextDue = nextDueDate(from: due, rule: item.repeatRule) else { return }
-        
+
+        // ✅ 计算下一次的提醒时间（如果当前任务有提醒）
+        var nextReminder: Date? = nil
+        if let currentReminder = item.reminderTime {
+            let cal = Calendar.current
+            let time = cal.dateComponents([.hour, .minute], from: currentReminder)
+            var comps = cal.dateComponents([.year, .month, .day], from: nextDue)
+            comps.hour = time.hour
+            comps.minute = time.minute
+            nextReminder = cal.date(from: comps)
+        }
+
         let newItem = TodoItem(
             title: item.title,
             isDone: false,
@@ -620,11 +673,12 @@ struct ContentView: View {
             priority: item.priority,
             listId: item.listId,
             deletedAt: nil,
-            repeatRule: item.repeatRule
+            repeatRule: item.repeatRule,
+            reminderTime: nextReminder
         )
         data.todos.append(newItem)
     }
-    
+
     private func nextDueDate(from date: Date, rule: TodoItem.RepeatRule) -> Date? {
         let cal = Calendar.current
         switch rule {
@@ -638,15 +692,15 @@ struct ContentView: View {
             return cal.date(byAdding: .month, value: 1, to: date)
         }
     }
-    
+
     private func moveToTrash(at index: Int) {
         data.todos[index].deletedAt = Date()
     }
-    
+
     private func purgeOldTrashIfNeeded() {
         let now = Date()
         let cal = Calendar.current
-        
+
         data.todos.removeAll { item in
             if let deletedAt = item.deletedAt {
                 if let days = cal.dateComponents([.day], from: deletedAt, to: now).day,
@@ -657,7 +711,7 @@ struct ContentView: View {
             return false
         }
     }
-    
+
     private func handleQuickActionIfNeeded() {
         guard let action = quickActions.lastAction else { return }
         switch action {
