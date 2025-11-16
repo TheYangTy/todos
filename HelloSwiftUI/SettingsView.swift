@@ -77,6 +77,20 @@ struct SettingsView: View {
                     }
                 }
             }
+            
+            // 数据与清单（⚠️ 这里用 NavigationLink 进入 ManageListsView）
+            Section("数据与清单") {
+                NavigationLink {
+                    ManageListsView(lists: $lists) { deletedId in
+                        onListDeleted(deletedId)
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: "list.bullet")
+                        Text("管理清单")
+                    }
+                }
+            }
 
             // 通知
             Section("通知") {
@@ -91,42 +105,7 @@ struct SettingsView: View {
                         }
                     }
             }
-
-            // 角标
-            Section("角标") {
-                Picker("角标统计范围", selection: $badgeModeRaw) {
-                    ForEach(BadgeMode.allCases) { mode in
-                        Text(mode.displayName).tag(mode.rawValue)
-                    }
-                }
-
-                if badgeMode == .range {
-                    DatePicker(
-                        "开始日期",
-                        selection: Binding(
-                            get: { badgeRangeStartDate },
-                            set: { badgeRangeStartTime = $0.timeIntervalSince1970 }
-                        ),
-                        displayedComponents: .date
-                    )
-
-                    DatePicker(
-                        "结束日期",
-                        selection: Binding(
-                            get: { badgeRangeEndDate },
-                            set: { badgeRangeEndTime = $0.timeIntervalSince1970 }
-                        ),
-                        in: badgeRangeStartDate...,
-                        displayedComponents: .date
-                    )
-                }
-
-                Text("角标只统计未删除且未完成的任务数量；“今天”和“时间范围”只包含设置了截止日期的任务。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
-            }
-
+            
             // 优先级颜色
             Section("优先级颜色") {
                 Picker("高优先级", selection: $priorityHighColorRaw) {
@@ -170,29 +149,54 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            // 角标
+            Section("角标") {
+                Picker("角标统计范围", selection: $badgeModeRaw) {
+                    ForEach(BadgeMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode.rawValue)
+                    }
+                }
+
+                if badgeMode == .range {
+                    DatePicker(
+                        "开始日期",
+                        selection: Binding(
+                            get: { badgeRangeStartDate },
+                            set: { badgeRangeStartTime = $0.timeIntervalSince1970 }
+                        ),
+                        displayedComponents: .date
+                    )
+
+                    DatePicker(
+                        "结束日期",
+                        selection: Binding(
+                            get: { badgeRangeEndDate },
+                            set: { badgeRangeEndTime = $0.timeIntervalSince1970 }
+                        ),
+                        in: badgeRangeStartDate...,
+                        displayedComponents: .date
+                    )
+                }
+
+                Text("角标只统计未删除且未完成的任务数量；“今天”和“时间范围”只包含设置了截止日期的任务。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+
+            
+
             // iCloud
             Section("iCloud") {
                 Toggle("使用 iCloud 同步数据", isOn: $enableICloudSync)
             }
 
-            // 数据与清单（⚠️ 这里用 NavigationLink 进入 ManageListsView）
-            Section("数据与清单") {
-                NavigationLink {
-                    ManageListsView(lists: $lists) { deletedId in
-                        onListDeleted(deletedId)
-                    }
-                } label: {
-                    HStack {
-                        Image(systemName: "list.bullet")
-                        Text("管理清单")
-                    }
-                }
-            }
+            
 
             // 关于
             Section("关于") {
                 Text("todos · 个人待办应用")
-                Text("使用 SwiftUI · WidgetKit · App Groups")
+                Text("@marcus")
                     .font(.footnote)
             }
         }
