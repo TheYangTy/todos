@@ -18,6 +18,11 @@ struct TodoRow: View {
         let dueDay = Calendar.current.startOfDay(for: due)
         return dueDay < today
     }
+    
+    /// 是否有地点信息
+    private var hasLocation: Bool {
+        return todo.location != nil
+    }
 
     /// 优先级圆点颜色（使用设置里的配置）
     private var priorityDotColor: Color {
@@ -84,6 +89,12 @@ struct TodoRow: View {
                         Text("· \(text)")
                             .font(.caption2)
                             .foregroundStyle(isOverdue ? .red.opacity(0.85) : .secondary)
+                    }
+
+                    // 如果有地点，在行尾显示一个小📍标记
+                    if hasLocation {
+                        Text("📍")
+                            .font(.caption2)
                     }
 
                     Spacer(minLength: 0)

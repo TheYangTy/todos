@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import WidgetKit
+import MapKit
 
 struct ContentView: View {
     @State private var data: AppData
@@ -14,6 +15,14 @@ struct ContentView: View {
     @State private var newPriority: TodoItem.Priority = .medium
     @State private var newRepeatRule: TodoItem.RepeatRule = .none
     @State private var newListId: UUID?
+    // 新增任务时的地点相关状态
+    @State private var newHasLocation: Bool = false
+    @State private var newLocationName: String = ""
+    @State private var newLocationRegion = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 22.5431, longitude: 114.0579),
+        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+    )
+    @State private var isPresentingNewLocationPicker: Bool = false
 
     @State private var searchText: String = ""
     @State private var selectedFilter: ListFilter = .all
@@ -385,6 +394,55 @@ struct ContentView: View {
                         }
                     }
                 }
+
+                // 地点（与编辑页风格保持一致）
+                Section("地点") {
+                    Toggle("添加地点", isOn: $newHasLocation)
+                        .onChange(of: newHasLocation) { newValue in
+                            if !newValue {
+                                // 关闭地点时，清空名称
+                                newLocationName = ""
+                            }
+                        }
+
+                    if newHasLocation {
+                        VStack(alignment: .leading, spacing: 4) {
+                            // 地图缩略图（只读），点击后进入全屏地图选择
+                            ZStack {
+                                Map(coordinateRegion: $newLocationRegion, interactionModes: [])
+                                    .frame(height: 120)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                    // 缩略图只作为预览，不处理手势
+                                    .allowsHitTesting(false)
+
+                                // 缩略图中央的图钉（不拦截手势）
+                                Image(systemName: "mappin.circle.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(.red, .white)
+                                    .allowsHitTesting(false)
+
+                                // 透明覆盖层，专门用来接收点击，弹出全屏地图
+                                Rectangle()
+                                    .fill(Color.clear)
+                                    .frame(height: 120)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        isPresentingNewLocationPicker = true
+                                    }
+                            }
+
+                            // 选定地点的名称（有名字时才显示）
+                            if !newLocationName.isEmpty {
+                                Text(newLocationName)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                        }
+                    }
+                }
             }
             .navigationTitle("新增事项")
             .navigationBarTitleDisplayMode(.inline)
@@ -401,6 +459,11 @@ struct ContentView: View {
                     .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty
                               || data.lists.isEmpty)
                 }
+            }
+            // 选择地点的全屏地图（复用编辑页的 LocationPickerView）
+            .sheet(isPresented: $isPresentingNewLocationPicker) {
+                LocationPickerView(region: $newLocationRegion,
+                                   locationName: $newLocationName)
             }
         }
     }
@@ -612,6 +675,10 @@ struct ContentView: View {
                 return id
             }
         }()
+        // 重置地点状态
+        newHasLocation = false
+        newLocationName = ""
+        // 保留上一次的 region 中心也可以，如果希望重置到默认，可在此重设 newLocationRegion
     }
 
     private func addTodo() {
@@ -621,7 +688,7 @@ struct ContentView: View {
 
         let due: Date? = newHasDueDate ? newDueDate : nil
 
-        let item = TodoItem(
+        var item = TodoItem(
             title: trimmed,
             isDone: false,
             dueDate: due,
@@ -630,6 +697,17 @@ struct ContentView: View {
             deletedAt: nil,
             repeatRule: newRepeatRule
         )
+
+        // 如果用户为新任务选择了地点，则写入 TodoItem.location
+        if newHasLocation {
+            let coord = newLocationRegion.center
+            item.location = TodoItem.TodoLocation(
+                name: newLocationName,
+                latitude: coord.latitude,
+                longitude: coord.longitude
+            )
+        }
+
         data.todos.append(item)
         isPresentingAddSheet = false
     }

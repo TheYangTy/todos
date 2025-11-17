@@ -11,6 +11,16 @@ struct TodoItem: Identifiable, Codable, Equatable {
     var deletedAt: Date? = nil
     var repeatRule: RepeatRule = .none
     
+    // 地点模型
+    struct TodoLocation: Codable, Equatable {
+        var name: String
+        var latitude: Double
+        var longitude: Double
+    }
+    
+    /// 地点信息（可选）
+    var location: TodoLocation? = nil
+    
     /// ✅ 新增：提醒时间（仅在有截止日期时可设置，为截止日当天某个时刻）
     var reminderTime: Date? = nil
 
