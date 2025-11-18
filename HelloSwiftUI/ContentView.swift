@@ -378,12 +378,20 @@ struct ContentView: View {
                     .pickerStyle(.segmented)
                 }
 
-                Section("重复") {
+                Section {
                     Picker("重复", selection: $newRepeatRule) {
                         ForEach(TodoItem.RepeatRule.allCases) { rule in
                             Text(rule.displayName).tag(rule)
                         }
                     }
+                } header: {
+                    Text("重复")
+                } footer: {
+                    Text("""
+                    重复任务完成后自动创建下一次任务。
+                    """)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("新增事项")
@@ -447,6 +455,16 @@ struct ContentView: View {
                 }
             }
         }
+    }
+    
+    // MARK: - 轻微震动反馈（Haptics）
+
+    private func softImpact() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    private func mediumImpact() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
     // MARK: - 过滤 & 排序逻辑
@@ -621,7 +639,8 @@ struct ContentView: View {
 
         let due: Date? = newHasDueDate ? newDueDate : nil
 
-        let item = TodoItem(
+        // 先构造一个 item
+        var item = TodoItem(
             title: trimmed,
             isDone: false,
             dueDate: due,
@@ -630,6 +649,14 @@ struct ContentView: View {
             deletedAt: nil,
             repeatRule: newRepeatRule
         )
+
+        // 🔑 如果设置了重复规则且有截止日期，那么把这一刻的 dueDate 作为「基准日期」
+        if newRepeatRule != .none, let due = due {
+            item.repeatBaseDate = due
+        }
+
+        // （如果你在新增页里加了地点逻辑，可以在这里再给 item.location 赋值）
+
         data.todos.append(item)
         isPresentingAddSheet = false
     }
@@ -640,12 +667,17 @@ struct ContentView: View {
     }
 
     private func markDone(at index: Int, done: Bool) {
+        softImpact()
         let item = data.todos[index]
         data.todos[index].isDone = done
 
+        // 只有“标记为完成”并且有重复规则、且有截止日期时，才生成下一条
         guard done,
               item.repeatRule != .none,
               let due = item.dueDate else { return }
+
+        // 🔑 老数据可能没有 repeatBaseDate，这里兜底用当前这条任务的截止日作为基准
+        let baseDate = item.repeatBaseDate ?? due
 
         // 避免过期很久的任务生成一堆未来任务
         if let days = Calendar.current.dateComponents([.day], from: due, to: Date()).day,
@@ -653,7 +685,10 @@ struct ContentView: View {
             return
         }
 
-        guard let nextDue = nextDueDate(from: due, rule: item.repeatRule) else { return }
+        // 计算下一次的截止日期（支持“每月固定某一天”）
+        guard let nextDue = nextDueDate(from: due, base: baseDate, rule: item.repeatRule) else {
+            return
+        }
 
         // ✅ 计算下一次的提醒时间（如果当前任务有提醒）
         var nextReminder: Date? = nil
@@ -666,6 +701,7 @@ struct ContentView: View {
             nextReminder = cal.date(from: comps)
         }
 
+        // 生成下一条任务，沿用同一个 repeatBaseDate
         let newItem = TodoItem(
             title: item.title,
             isDone: false,
@@ -674,26 +710,60 @@ struct ContentView: View {
             listId: item.listId,
             deletedAt: nil,
             repeatRule: item.repeatRule,
-            reminderTime: nextReminder
+            reminderTime: nextReminder,
+            location: item.location,
+            repeatBaseDate: baseDate
         )
+
         data.todos.append(newItem)
     }
 
-    private func nextDueDate(from date: Date, rule: TodoItem.RepeatRule) -> Date? {
+    /// 根据当前这次的截止日 + 基准日期，算下一次的截止日
+    private func nextDueDate(from current: Date,
+                             base: Date,
+                             rule: TodoItem.RepeatRule) -> Date? {
         let cal = Calendar.current
+
         switch rule {
         case .none:
             return nil
+
         case .daily:
-            return cal.date(byAdding: .day, value: 1, to: date)
+            // 每天：在当前截止日基础上 +1 天
+            return cal.date(byAdding: .day, value: 1, to: current)
+
         case .weekly:
-            return cal.date(byAdding: .day, value: 7, to: date)
+            // 每周：在当前截止日基础上 +7 天
+            return cal.date(byAdding: .day, value: 7, to: current)
+
         case .monthly:
-            return cal.date(byAdding: .month, value: 1, to: date)
+            // 每月固定某一天：
+            //   比如 base = 1 月 7 日，无论用户何时完成，
+            //   下一次都应该是下一个月的 7 号。
+            let baseDay = cal.component(.day, from: base)
+
+            // 先算出“下一个月”的年月
+            guard let nextMonthDate = cal.date(byAdding: .month, value: 1, to: current) else {
+                return nil
+            }
+
+            var comps = cal.dateComponents([.year, .month], from: nextMonthDate)
+
+            // 处理不同月份的天数差异（例如 31 号 → 2 月只有 28/29）
+            if let range = cal.range(of: .day, in: .month, for: nextMonthDate) {
+                let maxDay = range.count
+                comps.day = min(baseDay, maxDay)
+            } else {
+                comps.day = baseDay
+            }
+
+            return cal.date(from: comps)
         }
     }
 
     private func moveToTrash(at index: Int) {
+        // ✅ 删除用稍微重一点的震动
+        mediumImpact()
         data.todos[index].deletedAt = Date()
     }
 

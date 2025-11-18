@@ -139,12 +139,20 @@ struct TodoEditView: View {
             }
             
             // 重复
-            Section("重复") {
+            Section {
                 Picker("重复", selection: $todo.repeatRule) {
                     ForEach(TodoItem.RepeatRule.allCases) { rule in
                         Text(rule.displayName).tag(rule)
                     }
                 }
+            } header: {
+                Text("重复")
+            } footer: {
+                Text("""
+                重复任务完成后自动创建下一次任务。
+                """)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
         }
         .navigationTitle("编辑事项")
