@@ -114,6 +114,26 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             List {
+                // 总览入口（优雅的列表行）
+                Section {
+                    NavigationLink {
+                        OverviewView(data: $data)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("总览看板")
+                                    .font(.body)
+                                
+
+                                let stats = todayStats
+                                Text("今天 \(stats.total) 个 · 已完成 \(stats.done) 个 · 逾期 \(overdueCount) 个")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                        }
+                    }
+                }
                 // 清单选择
                 Section("清单") {
                     Picker("清单", selection: $selectedFilter) {
@@ -135,15 +155,7 @@ struct ContentView: View {
                     }
                 }
 
-                // 今天统计
-                if dateFilter == .today {
-                    Section {
-                        let stats = todayStats
-                        Text("今天共有 \(stats.total) 个任务 · 已完成 \(stats.done) 个")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                
 
                 // 待完成（带数量）
                 if !incompleteIndices.isEmpty {
@@ -250,6 +262,7 @@ struct ContentView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     EditButton()
                 }
+
                 // 筛选按钮
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
@@ -259,13 +272,13 @@ struct ContentView: View {
                     }
                     .accessibilityLabel("筛选与排序")
                 }
-                // 设置入口（这里不再负责“管理清单”的跳转）
+
+                // 设置入口
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink {
                         SettingsView(
                             lists: $data.lists,
                             onListDeleted: { deletedListId in
-                                // 如果清单被删，将属于该清单的任务归到第一个清单
                                 if let firstId = data.lists.first?.id {
                                     for idx in data.todos.indices {
                                         if data.todos[idx].listId == deletedListId {
@@ -280,6 +293,13 @@ struct ContentView: View {
                     }
                 }
             }
+//            .toolbarTitleMenu {     // ✅ 新增这段
+//                Button {
+//                    isShowingOverview = true
+//                } label: {
+//                    Label("总览看板", systemImage: "chart.bar.doc.horizontal")
+//                }
+//            }
             .sheet(isPresented: $isPresentingAddSheet) {
                 addTodoSheet
             }
@@ -571,6 +591,17 @@ struct ContentView: View {
         let done = allToday.filter { $0.isDone }.count
         return (total: allToday.count, done: done)
     }
+    
+    private var overdueCount: Int {
+        let today = Calendar.current.startOfDay(for: Date())
+        return data.todos.filter { todo in
+            guard let due = todo.dueDate,
+                  todo.deletedAt == nil,
+                  !todo.isDone else { return false }
+            let day = Calendar.current.startOfDay(for: due)
+            return day < today
+        }.count
+    }
 
     // MARK: - 角标统计
 
@@ -792,3 +823,5 @@ struct ContentView: View {
         quickActions.lastAction = nil
     }
 }
+
+
