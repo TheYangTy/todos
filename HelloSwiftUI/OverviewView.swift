@@ -3,7 +3,12 @@ import SwiftUI
 struct OverviewView: View {
     @Binding var data: AppData
 
-    // MARK: - 方便统计的中间数据
+    // MARK: - 日历状态
+    @State private var calendarMonth: Date = Calendar.current.startOfMonth(for: Date())
+    @State private var calendarSelectedDate: Date = Calendar.current.startOfDay(for: Date())
+    @State private var isShowingDayView = false
+
+    // MARK: - 基础统计
 
     private var activeTodos: [TodoItem] {
         data.todos.filter { $0.deletedAt == nil }
@@ -58,7 +63,8 @@ struct OverviewView: View {
         return Double(done) / Double(todos.count)
     }
 
-    // 按清单统计
+    // MARK: - 按清单统计
+
     private struct ListStat: Identifiable {
         let id: UUID
         let name: String
@@ -73,10 +79,11 @@ struct OverviewView: View {
             let done   = related.filter { $0.isDone }.count
             return ListStat(id: list.id, name: list.name, undone: undone, done: done)
         }
-        .filter { $0.undone + $0.done > 0 } // 没任务的清单可以过滤掉
+        .filter { $0.undone + $0.done > 0 }
     }
 
-    // 按优先级统计
+    // MARK: - 按优先级统计（未完成）
+
     private var highCount: Int {
         activeTodos.filter { !$0.isDone && $0.priority == .high }.count
     }
@@ -87,7 +94,8 @@ struct OverviewView: View {
         activeTodos.filter { !$0.isDone && $0.priority == .low }.count
     }
 
-    // 日期文字
+    // MARK: - 日期文本
+
     private var todayString: String {
         let f = DateFormatter()
         f.dateStyle = .medium
@@ -97,7 +105,7 @@ struct OverviewView: View {
 
     var body: some View {
         List {
-            // 顶部概览卡片
+            // 顶部「今天概览」卡片
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(todayString)
@@ -134,7 +142,7 @@ struct OverviewView: View {
                     }
                     .padding(.top, 4)
 
-                    // 完成率
+                    // 总体完成率
                     VStack(alignment: .leading, spacing: 4) {
                         Text("总体完成率")
                             .font(.caption)
@@ -153,9 +161,22 @@ struct OverviewView: View {
                 .padding(.vertical, 4)
             }
 
-            // 今天 & 未来 7 天
+            // 日历预览（整月）
+            Section("日历") {
+                OverviewCalendarView(
+                    month: $calendarMonth,
+                    selectedDate: $calendarSelectedDate,
+                    todos: activeTodos,
+                    onSelectDate: { date in
+                        calendarSelectedDate = date
+                        isShowingDayView = true
+                    }
+                )
+                .padding(.vertical, 4)
+            }
+
+            // 时间维度（可点进去看列表）
             Section("时间维度") {
-                // 今天待办（未完成）
                 NavigationLink {
                     OverviewSimpleList(
                         title: "今天待办",
@@ -171,7 +192,6 @@ struct OverviewView: View {
                     }
                 }
 
-                // 今天已完成
                 NavigationLink {
                     OverviewSimpleList(
                         title: "今天已完成",
@@ -187,7 +207,6 @@ struct OverviewView: View {
                     }
                 }
 
-                // 已逾期（未完成）
                 NavigationLink {
                     OverviewSimpleList(
                         title: "已逾期",
@@ -203,7 +222,6 @@ struct OverviewView: View {
                     }
                 }
 
-                // 未来 7 天到期（未完成）
                 NavigationLink {
                     OverviewSimpleList(
                         title: "未来 7 天到期",
@@ -239,21 +257,21 @@ struct OverviewView: View {
             Section("按优先级（未完成）") {
                 HStack {
                     Label("高", systemImage: "circle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundColor(.red)
                     Spacer()
                     Text("\(highCount)")
                         .foregroundStyle(.secondary)
                 }
                 HStack {
                     Label("中", systemImage: "circle.fill")
-                        .foregroundStyle(.orange)
+                        .foregroundColor(.orange)
                     Spacer()
                     Text("\(mediumCount)")
                         .foregroundStyle(.secondary)
                 }
                 HStack {
                     Label("低", systemImage: "circle.fill")
-                        .foregroundStyle(.green)
+                        .foregroundColor(.green)
                     Spacer()
                     Text("\(lowCount)")
                         .foregroundStyle(.secondary)
@@ -263,14 +281,178 @@ struct OverviewView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("总览")
         .navigationBarTitleDisplayMode(.inline)
+        .background(
+            NavigationLink(
+                destination: DayOverviewView(date: calendarSelectedDate, data: $data),
+                isActive: $isShowingDayView
+            ) {
+                EmptyView()
+            }
+            .hidden()
+        )
     }
 }
 
-#Preview {
-    NavigationStack {
-        OverviewView(data: .constant(AppData.initial()))
+// MARK: - 日历 View
+
+private struct OverviewCalendarView: View {
+    @Binding var month: Date
+    @Binding var selectedDate: Date
+
+    let todos: [TodoItem]
+    let onSelectDate: (Date) -> Void
+
+    private let calendar = Calendar.current
+
+    private var monthTitle: String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy年M月"
+        return f.string(from: month)
+    }
+
+    /// 当前月的所有格子（包含前导空白）
+    private var daysInMonth: [Date?] {
+        let startOfMonth = calendar.startOfMonth(for: month)
+        guard let range = calendar.range(of: .day, in: .month, for: startOfMonth) else {
+            return []
+        }
+
+        let firstWeekday = calendar.component(.weekday, from: startOfMonth) // 1=周日
+        // 让周一作为一周的第一天
+        let leadingEmpty = (firstWeekday + 5) % 7
+
+        var result: [Date?] = Array(repeating: nil, count: leadingEmpty)
+        for day in range {
+            if let date = calendar.date(byAdding: .day, value: day - 1, to: startOfMonth) {
+                result.append(date)
+            }
+        }
+        return result
+    }
+
+    /// 统计某天的任务数量（未完成/已完成/逾期）
+    private func summary(for date: Date) -> (undone: Int, done: Int, overdue: Int) {
+        let dayTodos = todos.filter { item in
+            guard let due = item.dueDate else { return false }
+            return calendar.isDate(due, inSameDayAs: date)
+        }
+        let undone = dayTodos.filter { !$0.isDone }.count
+        let done   = dayTodos.filter { $0.isDone }.count
+
+        let todayStart = calendar.startOfDay(for: Date())
+        let dayStart = calendar.startOfDay(for: date)
+        let overdue = (dayStart < todayStart) ? undone : 0
+
+        return (undone, done, overdue)
+    }
+
+    /// 小圆点颜色规则：逾期>未完成>已完成
+    private func dotColor(for summary: (undone: Int, done: Int, overdue: Int)) -> Color? {
+        if summary.overdue > 0 {
+            return .red
+        } else if summary.undone > 0 {
+            return .blue
+        } else if summary.done > 0 {
+            return .green
+        } else {
+            return nil
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // 顶部月份 + 切换按钮
+            HStack {
+                Button {
+                    if let prev = calendar.date(byAdding: .month, value: -1, to: month) {
+                        month = prev
+                    }
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Text(monthTitle)
+                    .font(.headline)
+
+                Spacer()
+
+                Button {
+                    if let next = calendar.date(byAdding: .month, value: 1, to: month) {
+                        month = next
+                    }
+                } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 4)
+
+            // 星期标题行（周一 - 周日）
+            HStack {
+                ForEach(["一","二","三","四","五","六","日"], id: \.self) { w in
+                    Text(w)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+
+            // 日期网格
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 6) {
+                ForEach(Array(daysInMonth.enumerated()), id: \.offset) { _, value in
+                    if let date = value {
+                        let day = calendar.component(.day, from: date)
+                        let isSelected = calendar.isDate(selectedDate, inSameDayAs: date)
+                        let isToday = calendar.isDateInToday(date)
+                        let summary = summary(for: date)
+                        let dot = dotColor(for: summary)
+
+                        Button {
+                            selectedDate = calendar.startOfDay(for: date)
+                            onSelectDate(selectedDate)
+                        } label: {
+                            VStack(spacing: 2) {
+                                Text("\(day)")
+                                    .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
+                                    .foregroundStyle(isSelected ? .white : .primary)
+
+                                if let dotColor = dot {
+                                    Circle()
+                                        .fill(dotColor)
+                                        .frame(width: 4, height: 4)
+                                } else {
+                                    Circle()
+                                        .fill(Color.clear)
+                                        .frame(width: 4, height: 4)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 28)
+                            .padding(4)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(
+                                        isSelected
+                                        ? Color.accentColor
+                                        : (isToday ? Color.accentColor.opacity(0.12) : Color.clear)
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        // 空白占位
+                        Color.clear
+                            .frame(minHeight: 28)
+                    }
+                }
+            }
+        }
     }
 }
+
+// MARK: - 时间维度用的简单列表
 
 struct OverviewSimpleList: View {
     let title: String
@@ -289,12 +471,10 @@ struct OverviewSimpleList: View {
             } else {
                 ForEach(todos) { todo in
                     VStack(alignment: .leading, spacing: 4) {
-                        // 标题
                         Text(todo.title)
                             .font(.body)
                             .lineLimit(1)
 
-                        // 清单名 + 截止日期（如果有）
                         HStack(spacing: 6) {
                             Text(nameForList(id: todo.listId))
                                 .font(.caption2)
@@ -319,5 +499,20 @@ struct OverviewSimpleList: View {
         .listStyle(.insetGrouped)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Date helper
+
+private extension Calendar {
+    func startOfMonth(for date: Date) -> Date {
+        let comps = dateComponents([.year, .month], from: date)
+        return self.date(from: comps) ?? date
+    }
+}
+
+#Preview {
+    NavigationStack {
+        OverviewView(data: .constant(AppData.initial()))
     }
 }
