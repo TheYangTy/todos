@@ -37,7 +37,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		2C3DEB0E2EC79E7B00DBC19F /* HelloSwiftUI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HelloSwiftUI.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2C3DEB0E2EC79E7B00DBC19F /* todos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = todos.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C3DEB392EC85E7D00DBC19F /* TodosWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TodosWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C3DEB3B2EC85E7D00DBC19F /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		2C3DEB3D2EC85E7E00DBC19F /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
@@ -52,7 +52,7 @@
 			);
 			target = 2C3DEB382EC85E7D00DBC19F /* TodosWidgetExtension */;
 		};
-		2C3DEB572EC85FCF00DBC19F /* Exceptions for "HelloSwiftUI" folder in "TodosWidgetExtension" target */ = {
+		2C3DEB572EC85FCF00DBC19F /* Exceptions for "todos" folder in "TodosWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				AppData.swift,
@@ -63,12 +63,12 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		2C3DEB102EC79E7B00DBC19F /* HelloSwiftUI */ = {
+		2C3DEB102EC79E7B00DBC19F /* todos */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				2C3DEB572EC85FCF00DBC19F /* Exceptions for "HelloSwiftUI" folder in "TodosWidgetExtension" target */,
+				2C3DEB572EC85FCF00DBC19F /* Exceptions for "todos" folder in "TodosWidgetExtension" target */,
 			);
-			path = HelloSwiftUI;
+			path = todos;
 			sourceTree = "<group>";
 		};
 		2C3DEB3F2EC85E7E00DBC19F /* TodosWidget */ = {
@@ -105,7 +105,7 @@
 			isa = PBXGroup;
 			children = (
 				2C3DEB582EC8642900DBC19F /* TodosWidgetExtension.entitlements */,
-				2C3DEB102EC79E7B00DBC19F /* HelloSwiftUI */,
+				2C3DEB102EC79E7B00DBC19F /* todos */,
 				2C3DEB3F2EC85E7E00DBC19F /* TodosWidget */,
 				2C3DEB3A2EC85E7D00DBC19F /* Frameworks */,
 				2C3DEB0F2EC79E7B00DBC19F /* Products */,
@@ -115,7 +115,7 @@
 		2C3DEB0F2EC79E7B00DBC19F /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				2C3DEB0E2EC79E7B00DBC19F /* HelloSwiftUI.app */,
+				2C3DEB0E2EC79E7B00DBC19F /* todos.app */,
 				2C3DEB392EC85E7D00DBC19F /* TodosWidgetExtension.appex */,
 			);
 			name = Products;
@@ -133,9 +133,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		2C3DEB0D2EC79E7B00DBC19F /* HelloSwiftUI */ = {
+		2C3DEB0D2EC79E7B00DBC19F /* todos */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 2C3DEB192EC79E7C00DBC19F /* Build configuration list for PBXNativeTarget "HelloSwiftUI" */;
+			buildConfigurationList = 2C3DEB192EC79E7C00DBC19F /* Build configuration list for PBXNativeTarget "todos" */;
 			buildPhases = (
 				2C3DEB0A2EC79E7B00DBC19F /* Sources */,
 				2C3DEB0B2EC79E7B00DBC19F /* Frameworks */,
@@ -148,13 +148,13 @@
 				2C3DEB4E2EC85E8000DBC19F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				2C3DEB102EC79E7B00DBC19F /* HelloSwiftUI */,
+				2C3DEB102EC79E7B00DBC19F /* todos */,
 			);
-			name = HelloSwiftUI;
+			name = todos;
 			packageProductDependencies = (
 			);
 			productName = HelloSwiftUI;
-			productReference = 2C3DEB0E2EC79E7B00DBC19F /* HelloSwiftUI.app */;
+			productReference = 2C3DEB0E2EC79E7B00DBC19F /* todos.app */;
 			productType = "com.apple.product-type.application";
 		};
 		2C3DEB382EC85E7D00DBC19F /* TodosWidgetExtension */ = {
@@ -197,7 +197,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 2C3DEB092EC79E7B00DBC19F /* Build configuration list for PBXProject "HelloSwiftUI" */;
+			buildConfigurationList = 2C3DEB092EC79E7B00DBC19F /* Build configuration list for PBXProject "todos" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -211,7 +211,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				2C3DEB0D2EC79E7B00DBC19F /* HelloSwiftUI */,
+				2C3DEB0D2EC79E7B00DBC19F /* todos */,
 				2C3DEB382EC85E7D00DBC19F /* TodosWidgetExtension */,
 			);
 		};
@@ -386,13 +386,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = HelloSwiftUI/HelloSwiftUI.entitlements;
+				CODE_SIGN_ENTITLEMENTS = todos/todos.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = GDPAN3PML4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = todos;
+				INFOPLIST_KEY_CFBundleDisplayName = todoos;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -420,13 +421,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = HelloSwiftUI/HelloSwiftUI.entitlements;
+				CODE_SIGN_ENTITLEMENTS = todos/todos.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = GDPAN3PML4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = todos;
+				INFOPLIST_KEY_CFBundleDisplayName = todoos;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -514,7 +516,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		2C3DEB092EC79E7B00DBC19F /* Build configuration list for PBXProject "HelloSwiftUI" */ = {
+		2C3DEB092EC79E7B00DBC19F /* Build configuration list for PBXProject "todos" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				2C3DEB172EC79E7C00DBC19F /* Debug */,
@@ -523,7 +525,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		2C3DEB192EC79E7C00DBC19F /* Build configuration list for PBXNativeTarget "HelloSwiftUI" */ = {
+		2C3DEB192EC79E7C00DBC19F /* Build configuration list for PBXNativeTarget "todos" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				2C3DEB1A2EC79E7C00DBC19F /* Debug */,
