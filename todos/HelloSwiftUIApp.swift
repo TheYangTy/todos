@@ -104,10 +104,13 @@ struct HelloSwiftUIApp: App {
                 }
                 .sheet(item: $deepLinkDay) { wrapper in
                     // ⚠️ 如果你的 DayOverviewView 初始化方法不同，可以在这里调整参数
-                    DayOverviewView(
-                        date: wrapper.date,
-                        data: .constant(AppData.loadFromLocal() ?? AppData.initial())
-                    )
+                    NavigationStack {
+                            DayOverviewView(
+                                date: wrapper.date,
+                                data: .constant(AppData.loadFromLocal() ?? AppData.initial())
+                            )
+                        }
+                    .navigationBarTitleDisplayMode(.inline)
                 }
         }
     }

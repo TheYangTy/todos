@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct DayOverviewView: View {
     @Binding var data: AppData
@@ -40,6 +41,23 @@ struct DayOverviewView: View {
         let today = calendar.startOfDay(for: Date())
         return day < today
     }
+    
+    private func overdueDescription(for item: TodoItem) -> String {
+        guard let due = item.dueDate else {
+            return "已逾期"
+        }
+        let startDue = calendar.startOfDay(for: due)
+        let startToday = calendar.startOfDay(for: Date())
+        let days = calendar.dateComponents([.day], from: startDue, to: startToday).day ?? 0
+        
+        if days <= 0 {
+            return "已逾期"
+        } else if days == 1 {
+            return "已逾期 1 天"
+        } else {
+            return "已逾期 \(days) 天"
+        }
+    }
 
     private var titleText: String {
         if calendar.isDateInToday(currentDate) {
@@ -63,6 +81,11 @@ struct DayOverviewView: View {
         data.lists.first(where: { $0.id == id })?.name ?? "未知清单"
     }
 
+    /// 根据 item 找到在 data.todos 中的下标，用于做绑定 & 修改
+    private func index(for item: TodoItem) -> Int? {
+        data.todos.firstIndex { $0.id == item.id }
+    }
+
     private func goTo(offset: Int) {
         if let next = calendar.date(byAdding: .day, value: offset, to: currentDate) {
             currentDate = calendar.startOfDay(for: next)
@@ -71,6 +94,16 @@ struct DayOverviewView: View {
 
     private func goToToday() {
         currentDate = calendar.startOfDay(for: Date())
+    }
+    
+    private func playTickHaptic() {
+        if #available(iOS 17.0, *) {
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+        } else {
+            let generator = UISelectionFeedbackGenerator()
+            generator.selectionChanged()
+        }
     }
 
     // MARK: - View
@@ -106,7 +139,6 @@ struct DayOverviewView: View {
 
                     // 右侧：今天徽标 / 按钮 + 后一天
                     HStack(spacing: 8) {
-                        // 当前是今天：右侧显示一个静态“今天”徽标（不可点，表示当前就在今天）
                         if calendar.isDateInToday(currentDate) {
                             Text("今天")
                                 .font(.footnote)
@@ -117,7 +149,6 @@ struct DayOverviewView: View {
                                         .fill(Color.accentColor.opacity(0.18))
                                 )
                         } else {
-                            // 不是今天：显示“今天”按钮，点击跳回今天
                             Button {
                                 goToToday()
                             } label: {
@@ -149,59 +180,79 @@ struct DayOverviewView: View {
                 .padding(.vertical, 4)
             }
 
+            // 逾期
             if !overdueTodos.isEmpty {
                 Section("逾期") {
                     ForEach(overdueTodos) { item in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(item.title)
-                                .font(.body)
-                            HStack(spacing: 6) {
-                                Text(nameForList(id: item.listId))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                Text("已逾期")
-                                    .font(.caption2)
-                                    .foregroundStyle(.red)
+                        if let index = index(for: item) {
+                            NavigationLink {
+                                TodoEditView(todo: $data.todos[index], lists: data.lists)
+                            } label: {
+                                rowContent(for: index, showOverdueTag: true)
+                            }
+                            // 右滑：完成
+                            .swipeActions(edge: .trailing) {
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        data.todos[index].isDone.toggle()
+                                        playTickHaptic()
+                                    }
+                                } label: {
+                                    Label("完成", systemImage: "checkmark")
+                                }
+                                .tint(.green)
                             }
                         }
                     }
                 }
             }
 
+            // 待完成
             if !undoneTodos.isEmpty {
                 Section("待完成") {
                     ForEach(undoneTodos) { item in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(item.title)
-                                .font(.body)
-                            HStack(spacing: 6) {
-                                Text(nameForList(id: item.listId))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                if let due = item.dueDate {
-                                    Text(due, style: .time)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
+                        if let index = index(for: item) {
+                            NavigationLink {
+                                TodoEditView(todo: $data.todos[index], lists: data.lists)
+                            } label: {
+                                rowContent(for: index, showOverdueTag: false)
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        data.todos[index].isDone.toggle()
+                                        playTickHaptic()
+                                    }
+                                } label: {
+                                    Label("完成", systemImage: "checkmark")
                                 }
+                                .tint(.green)
                             }
                         }
                     }
                 }
             }
 
+            // 已完成
             if !doneTodos.isEmpty {
                 Section("已完成") {
                     ForEach(doneTodos) { item in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(item.title)
-                                .font(.body)
-                            HStack(spacing: 6) {
-                                Text(nameForList(id: item.listId))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                Text("已完成")
-                                    .font(.caption2)
-                                    .foregroundStyle(.green)
+                        if let index = index(for: item) {
+                            NavigationLink {
+                                TodoEditView(todo: $data.todos[index], lists: data.lists)
+                            } label: {
+                                rowContent(for: index, showDoneTag: true)
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        data.todos[index].isDone.toggle()
+                                        playTickHaptic()
+                                    }
+                                } label: {
+                                    Label("标记未完成", systemImage: "arrow.uturn.backward")
+                                }
+                                .tint(.orange)
                             }
                         }
                     }
@@ -216,6 +267,7 @@ struct DayOverviewView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .navigationTitle(titleText)
         .navigationBarTitleDisplayMode(.inline)
         .gesture(
             // 保留左右滑切换天
@@ -228,6 +280,56 @@ struct DayOverviewView: View {
                     }
                 }
         )
+    }
+
+    // MARK: - 单行内容封装，避免三处重复
+
+    @ViewBuilder
+    private func rowContent(for index: Int,
+                            showOverdueTag: Bool = false,
+                            showDoneTag: Bool = false) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            // 勾选按钮 + 动画
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    data.todos[index].isDone.toggle()
+                    playTickHaptic()
+                }
+            } label: {
+                Image(systemName: data.todos[index].isDone ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(data.todos[index].isDone ? .green : .secondary)
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(data.todos[index].title)
+                    .font(.body)
+                HStack(spacing: 6) {
+                    Text(nameForList(id: data.todos[index].listId))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    if showOverdueTag {
+                        Text(overdueDescription(for: data.todos[index]))
+                            .font(.caption2)
+                            .foregroundStyle(.red)
+                    }
+
+                    if showDoneTag {
+                        Text("已完成")
+                            .font(.caption2)
+                            .foregroundStyle(.green)
+                    }
+
+                    // ✅ 只在有提醒时间时显示“几点”
+                    if let reminder = data.todos[index].reminderTime {
+                        Text(reminder, style: .time)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
     }
 }
 
