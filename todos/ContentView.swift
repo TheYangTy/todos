@@ -13,6 +13,8 @@ struct ContentView: View {
     @State private var newHasDueDate: Bool = false
     @State private var newPriority: TodoItem.Priority = .medium
     @State private var newRepeatRule: TodoItem.RepeatRule = .none
+    @State private var newHasReminder: Bool = false          // 新增
+    @State private var newReminderTime: Date = Date()        // 新增
     @State private var newListId: UUID?
 
     @State private var searchText: String = ""
@@ -335,6 +337,7 @@ struct ContentView: View {
 
                 // Widget 刷新
                 WidgetCenter.shared.reloadTimelines(ofKind: "TodosWidget")
+                WidgetCenter.shared.reloadTimelines(ofKind: "TodosOverviewWidget")
             }
             .onAppear {
                 purgeOldTrashIfNeeded()
@@ -381,11 +384,44 @@ struct ContentView: View {
 
                 Section("截止日期") {
                     Toggle("设置截止日期", isOn: $newHasDueDate)
+                        .onChange(of: newHasDueDate) { hasDate in
+                            if hasDate {
+                                // 默认给截止日当天 09:00 一个提醒时间
+                                let cal = Calendar.current
+                                var comps = cal.dateComponents([.year, .month, .day], from: newDueDate)
+                                comps.hour = 9
+                                comps.minute = 0
+                                newReminderTime = cal.date(from: comps) ?? newDueDate
+                            } else {
+                                // 去掉截止日期时，同步关闭提醒
+                                newHasReminder = false
+                            }
+                        }
 
                     if newHasDueDate {
                         DatePicker("日期",
                                    selection: $newDueDate,
                                    displayedComponents: .date)
+                    }
+                }
+
+                Section("提醒") {
+                    if !newHasDueDate {
+                        Toggle("开启提醒", isOn: .constant(false))
+                            .disabled(true)
+                        Text("请先设置截止日期，才能选择提醒时间")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Toggle("开启提醒", isOn: $newHasReminder)
+
+                        if newHasReminder {
+                            DatePicker(
+                                "提醒时间",
+                                selection: $newReminderTime,
+                                displayedComponents: .hourAndMinute
+                            )
+                        }
                     }
                 }
 
@@ -395,7 +431,6 @@ struct ContentView: View {
                             Text(level.displayName).tag(level)
                         }
                     }
-                    .pickerStyle(.segmented)
                 }
 
                 Section {
@@ -653,6 +688,8 @@ struct ContentView: View {
         newDueDate = Date()
         newPriority = defaultPriority
         newRepeatRule = .none
+        newHasReminder = false
+        newReminderTime = Date()
         newListId = {
             switch selectedFilter {
             case .all:
@@ -680,6 +717,18 @@ struct ContentView: View {
             deletedAt: nil,
             repeatRule: newRepeatRule
         )
+
+        // ✅ 根据开关设置提醒时间（把选择的时分投射到截止日当天）
+        if newHasDueDate, let due = due, newHasReminder {
+            let cal = Calendar.current
+            let time = cal.dateComponents([.hour, .minute], from: newReminderTime)
+            var comps = cal.dateComponents([.year, .month, .day], from: due)
+            comps.hour = time.hour
+            comps.minute = time.minute
+            item.reminderTime = cal.date(from: comps)
+        } else {
+            item.reminderTime = nil
+        }
 
         // 🔑 如果设置了重复规则且有截止日期，那么把这一刻的 dueDate 作为「基准日期」
         if newRepeatRule != .none, let due = due {

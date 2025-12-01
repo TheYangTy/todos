@@ -73,11 +73,17 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 }
 
+struct DeepLinkDay: Identifiable {
+    let id = UUID()
+    let date: Date
+}
+
 // App 入口
 @main
 struct HelloSwiftUIApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var quickActions = QuickActionCenter.shared
+    @State private var deepLinkDay: DeepLinkDay? = nil
     
     @AppStorage("appTheme") private var appThemeRaw: String = AppTheme.system.rawValue
     
@@ -91,6 +97,34 @@ struct HelloSwiftUIApp: App {
                 .environmentObject(quickActions)
                 // 使用设置选择的主题（自动 / 浅色 / 深色）
                 .preferredColorScheme(appTheme.colorScheme)
+                .onOpenURL { url in
+                    if let day = parseDayURL(url) {
+                        deepLinkDay = day
+                    }
+                }
+                .sheet(item: $deepLinkDay) { wrapper in
+                    // ⚠️ 如果你的 DayOverviewView 初始化方法不同，可以在这里调整参数
+                    DayOverviewView(
+                        date: wrapper.date,
+                        data: .constant(AppData.loadFromLocal() ?? AppData.initial())
+                    )
+                }
         }
+    }
+    
+    private func parseDayURL(_ url: URL) -> DeepLinkDay? {
+        guard url.scheme == "todos",
+              url.host == "day",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let dateStr = components.queryItems?.first(where: { $0.name == "date" })?.value
+        else {
+            return nil
+        }
+        
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.dateFormat = "yyyy-MM-dd"
+        guard let date = f.date(from: dateStr) else { return nil }
+        return DeepLinkDay(date: date)
     }
 }
