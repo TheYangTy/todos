@@ -163,7 +163,7 @@ struct ProgressRingLockView: View {
 
     private var progress: Double {
         let total = max(stats.total, 1)
-        return Double(stats.done) / Double(total)
+        return min(max(Double(stats.done) / Double(total), 0), 1) // clamp 到 0...1
     }
 
     private var todayDateString: String {
@@ -179,18 +179,21 @@ struct ProgressRingLockView: View {
 
     var body: some View {
         ZStack {
-            AccessoryWidgetBackground()
+            // 背景圈（更细一点）
+            Circle()
+                .stroke(Color.secondary.opacity(0.25), lineWidth: 3)
 
-            Gauge(value: progress) {
-                if stats.total == 0 {
-                    Text("0")
-                } else {
-                    Text("\(Int(progress * 100))")
-                }
-            } currentValueLabel: {
-                EmptyView()
-            }
-            .gaugeStyle(.accessoryCircularCapacity)
+            // 进度圈
+            Circle()
+                .trim(from: 0, to: progress)
+                .rotation(Angle(degrees: -90)) // 从 12 点方向开始
+                .stroke(
+                    Color.accentColor,
+                    style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                )
+
+            // 中间内容：不显示任何图标或数字，保持极简
+            Group {}
         }
         .widgetURL(deepLinkURL)
     }

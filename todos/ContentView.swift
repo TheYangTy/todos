@@ -335,9 +335,18 @@ struct ContentView: View {
                 // 角标（根据设置计算）
                 UIApplication.shared.applicationIconBadgeNumber = computeBadgeCount()
 
-                // Widget 刷新
-                WidgetCenter.shared.reloadTimelines(ofKind: "TodosWidget")
-                WidgetCenter.shared.reloadTimelines(ofKind: "TodosOverviewWidget")
+                // Widget 刷新 —— 刷新所有桌面和锁屏小组件
+                let kinds = [
+                    "TodosWidget",              // 首页小组件
+                    "TodosOverviewWidget",      // 如果你有这个 kind（没有也没关系，多写一个不会崩）
+                    "TodaySummaryLockWidget",   // 锁屏顶部一句话
+                    "ProgressRingLockWidget",   // 锁屏圆环
+                    "MiniListLockWidget"        // 锁屏列表
+                ]
+
+                for kind in kinds {
+                    WidgetCenter.shared.reloadTimelines(ofKind: kind)
+                }
             }
             .onAppear {
                 purgeOldTrashIfNeeded()
