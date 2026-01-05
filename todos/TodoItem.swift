@@ -48,6 +48,8 @@ struct TodoItem: Identifiable, Codable, Equatable {
     let id: UUID
     var title: String
     var isDone: Bool
+    /// 完成时间（用于“已完成”列表倒序/顺序排序）
+    var completedAt: Date?
     var dueDate: Date?
     var priority: Priority
     var listId: UUID
@@ -69,6 +71,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
         id: UUID = UUID(),
         title: String,
         isDone: Bool = false,
+        completedAt: Date? = nil,
         dueDate: Date? = nil,
         priority: Priority = .medium,
         listId: UUID,
@@ -81,6 +84,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
         self.id = id
         self.title = title
         self.isDone = isDone
+        self.completedAt = completedAt
         self.dueDate = dueDate
         self.priority = priority
         self.listId = listId

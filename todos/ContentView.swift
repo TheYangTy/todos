@@ -31,6 +31,10 @@ struct ContentView: View {
 
     @AppStorage("sortOption") private var sortOptionRaw: String = SortOption.priority.rawValue
     @AppStorage("showCompleted") private var showCompleted: Bool = true
+
+    /// ✅ 已完成默认倒序；点击“已完成”标题切换倒序/顺序
+    @AppStorage("completedSortDescending") private var completedSortDescending: Bool = true
+
     @AppStorage("defaultPriority") private var defaultPriorityRaw: String = TodoItem.Priority.medium.rawValue
     @AppStorage("enableNotifications") private var enableNotifications: Bool = false
     @AppStorage("enableICloudSync") private var enableICloudSync: Bool = false
@@ -125,7 +129,6 @@ struct ContentView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("总览看板")
                                     .font(.body)
-                                
 
                                 let stats = todayStats
                                 Text("今天 \(stats.total) 个 · 已完成 \(stats.done) 个 · 逾期 \(overdueCount) 个")
@@ -136,6 +139,7 @@ struct ContentView: View {
                         }
                     }
                 }
+
                 // 清单选择
                 Section("清单") {
                     Picker("清单", selection: $selectedFilter) {
@@ -156,8 +160,6 @@ struct ContentView: View {
                         Label("新增待办事项", systemImage: "plus.circle")
                     }
                 }
-
-                
 
                 // 待完成（带数量）
                 if !incompleteIndices.isEmpty {
@@ -239,12 +241,21 @@ struct ContentView: View {
                             }
                         }
                     } header: {
-                        HStack {
+                        HStack(spacing: 6) {
                             Text("已完成")
+                            Image(systemName: completedSortDescending ? "chevron.down" : "chevron.up")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+
                             Spacer()
+
                             Text("\(completedIndices.count) 项")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            completedSortDescending.toggle()
                         }
                     }
                 }
@@ -295,13 +306,6 @@ struct ContentView: View {
                     }
                 }
             }
-//            .toolbarTitleMenu {     // ✅ 新增这段
-//                Button {
-//                    isShowingOverview = true
-//                } label: {
-//                    Label("总览看板", systemImage: "chart.bar.doc.horizontal")
-//                }
-//            }
             .sheet(isPresented: $isPresentingAddSheet) {
                 addTodoSheet
             }
@@ -579,6 +583,16 @@ struct ContentView: View {
             let a = data.todos[lhs]
             let b = data.todos[rhs]
 
+            // ✅ 已完成列表：按完成时间排序（默认倒序），点击标题可切换顺/倒序
+            if completed {
+                let ta = a.completedAt ?? a.dueDate ?? Date.distantPast
+                let tb = b.completedAt ?? b.dueDate ?? Date.distantPast
+                if ta != tb {
+                    return completedSortDescending ? (ta > tb) : (ta < tb)
+                }
+                return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
+            }
+
             switch sortOption {
             case .priority:
                 let order: [TodoItem.Priority: Int] = [.high: 0, .medium: 1, .low: 2]
@@ -720,6 +734,7 @@ struct ContentView: View {
         var item = TodoItem(
             title: trimmed,
             isDone: false,
+            completedAt: nil,
             dueDate: due,
             priority: newPriority,
             listId: listId,
@@ -744,8 +759,6 @@ struct ContentView: View {
             item.repeatBaseDate = due
         }
 
-        // （如果你在新增页里加了地点逻辑，可以在这里再给 item.location 赋值）
-
         data.todos.append(item)
         isPresentingAddSheet = false
     }
@@ -759,27 +772,24 @@ struct ContentView: View {
         softImpact()
         let item = data.todos[index]
         data.todos[index].isDone = done
+        data.todos[index].completedAt = done ? Date() : nil
 
         // 只有“标记为完成”并且有重复规则、且有截止日期时，才生成下一条
         guard done,
               item.repeatRule != .none,
               let due = item.dueDate else { return }
 
-        // 🔑 老数据可能没有 repeatBaseDate，这里兜底用当前这条任务的截止日作为基准
         let baseDate = item.repeatBaseDate ?? due
 
-        // 避免过期很久的任务生成一堆未来任务
         if let days = Calendar.current.dateComponents([.day], from: due, to: Date()).day,
            days > 7 {
             return
         }
 
-        // 计算下一次的截止日期（支持“每月固定某一天”）
         guard let nextDue = nextDueDate(from: due, base: baseDate, rule: item.repeatRule) else {
             return
         }
 
-        // ✅ 计算下一次的提醒时间（如果当前任务有提醒）
         var nextReminder: Date? = nil
         if let currentReminder = item.reminderTime {
             let cal = Calendar.current
@@ -790,10 +800,10 @@ struct ContentView: View {
             nextReminder = cal.date(from: comps)
         }
 
-        // 生成下一条任务，沿用同一个 repeatBaseDate
         let newItem = TodoItem(
             title: item.title,
             isDone: false,
+            completedAt: nil,
             dueDate: nextDue,
             priority: item.priority,
             listId: item.listId,
@@ -818,27 +828,20 @@ struct ContentView: View {
             return nil
 
         case .daily:
-            // 每天：在当前截止日基础上 +1 天
             return cal.date(byAdding: .day, value: 1, to: current)
 
         case .weekly:
-            // 每周：在当前截止日基础上 +7 天
             return cal.date(byAdding: .day, value: 7, to: current)
 
         case .monthly:
-            // 每月固定某一天：
-            //   比如 base = 1 月 7 日，无论用户何时完成，
-            //   下一次都应该是下一个月的 7 号。
             let baseDay = cal.component(.day, from: base)
 
-            // 先算出“下一个月”的年月
             guard let nextMonthDate = cal.date(byAdding: .month, value: 1, to: current) else {
                 return nil
             }
 
             var comps = cal.dateComponents([.year, .month], from: nextMonthDate)
 
-            // 处理不同月份的天数差异（例如 31 号 → 2 月只有 28/29）
             if let range = cal.range(of: .day, in: .month, for: nextMonthDate) {
                 let maxDay = range.count
                 comps.day = min(baseDay, maxDay)
@@ -851,7 +854,6 @@ struct ContentView: View {
     }
 
     private func moveToTrash(at index: Int) {
-        // ✅ 删除用稍微重一点的震动
         mediumImpact()
         data.todos[index].deletedAt = Date()
     }
@@ -881,5 +883,3 @@ struct ContentView: View {
         quickActions.lastAction = nil
     }
 }
-
-
