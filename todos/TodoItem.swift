@@ -68,6 +68,22 @@ struct TodoItem: Identifiable, Codable, Equatable {
     // “每月固定某一天”用的基准日期（例如每月 7 号）
     var repeatBaseDate: Date?
 
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case isDone
+        case isPinned
+        case pinnedAt
+        case dueDate
+        case priority
+        case listId
+        case deletedAt
+        case repeatRule
+        case reminderTime
+        case location
+        case repeatBaseDate
+    }
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -96,5 +112,22 @@ struct TodoItem: Identifiable, Codable, Equatable {
         self.reminderTime = reminderTime
         self.location = location
         self.repeatBaseDate = repeatBaseDate
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        isDone = try container.decode(Bool.self, forKey: .isDone)
+        isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        pinnedAt = try container.decodeIfPresent(Date.self, forKey: .pinnedAt)
+        dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate)
+        priority = try container.decode(Priority.self, forKey: .priority)
+        listId = try container.decode(UUID.self, forKey: .listId)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+        repeatRule = try container.decodeIfPresent(RepeatRule.self, forKey: .repeatRule) ?? .none
+        reminderTime = try container.decodeIfPresent(Date.self, forKey: .reminderTime)
+        location = try container.decodeIfPresent(TodoLocation.self, forKey: .location)
+        repeatBaseDate = try container.decodeIfPresent(Date.self, forKey: .repeatBaseDate)
     }
 }

@@ -4,6 +4,7 @@ struct TodoRow: View {
     @Binding var todo: TodoItem
     let listName: String
     let lists: [TodoList]
+    let isPinned: Bool
     let onToggleDone: () -> Void
     let onTapDetail: () -> Void
 
@@ -90,7 +91,7 @@ struct TodoRow: View {
             Spacer()
 
             // 右侧：关注标记（可选）
-            if todo.isPinned {
+            if isPinned {
                 Image(systemName: "pin.fill")
                     .foregroundStyle(.secondary)
                     .imageScale(.small)
@@ -122,6 +123,7 @@ struct TodoRow: View {
                 todo: .constant(item),
                 listName: list.name,
                 lists: [list],
+                isPinned: false,
                 onToggleDone: {},
                 onTapDetail: {}
             )

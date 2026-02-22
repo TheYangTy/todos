@@ -200,6 +200,7 @@ struct ContentView: View {
                                 todo: $data.todos[idx],
                                 listName: listName,
                                 lists: data.lists,
+                                isPinned: true,
                                 onToggleDone: { toggleDone(at: idx) },
                                 onTapDetail: {
                                     selectedTodoID = data.todos[idx].id
@@ -250,6 +251,7 @@ struct ContentView: View {
                                 todo: $data.todos[idx],
                                 listName: listName,
                                 lists: data.lists,
+                                isPinned: isPinned(data.todos[idx].id),
                                 onToggleDone: { toggleDone(at: idx) },
                                 onTapDetail: {
                                     selectedTodoID = data.todos[idx].id
@@ -304,6 +306,7 @@ struct ContentView: View {
                                 todo: $data.todos[idx],
                                 listName: listName,
                                 lists: data.lists,
+                                isPinned: isPinned(data.todos[idx].id),
                                 onToggleDone: { toggleDone(at: idx) },
                                 onTapDetail: {
                                     selectedTodoID = data.todos[idx].id

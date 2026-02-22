@@ -120,7 +120,7 @@ struct TodaySummaryLockView: View {
     }
 
     private var deepLinkURL: URL? {
-        URL(string: "todos://day-overview?date=\(todayDateString)")
+        URL(string: "todos://day?date=\(todayDateString)")
     }
 
     var body: some View {
@@ -135,6 +135,7 @@ struct TodaySummaryLockView: View {
                 }
             }
         }
+        .containerBackground(.background, for: .widget)
         .widgetURL(deepLinkURL)
     }
 }
@@ -174,7 +175,7 @@ struct ProgressRingLockView: View {
     }
 
     private var deepLinkURL: URL? {
-        URL(string: "todos://day-overview?date=\(todayDateString)")
+        URL(string: "todos://day?date=\(todayDateString)")
     }
 
     var body: some View {
@@ -195,6 +196,7 @@ struct ProgressRingLockView: View {
             // 中间内容：不显示任何图标或数字，保持极简
             Group {}
         }
+        .containerBackground(.background, for: .widget)
         .widgetURL(deepLinkURL)
     }
 }
@@ -233,7 +235,7 @@ struct MiniListLockView: View {
     }
 
     private var deepLinkURL: URL? {
-        URL(string: "todos://day-overview?date=\(todayDateString)")
+        URL(string: "todos://day?date=\(todayDateString)")
     }
 
     var body: some View {
@@ -259,6 +261,7 @@ struct MiniListLockView: View {
                 }
             }
         }
+        .containerBackground(.background, for: .widget)
         .widgetURL(deepLinkURL)
     }
 }

@@ -117,7 +117,7 @@ struct HelloSwiftUIApp: App {
     
     private func parseDayURL(_ url: URL) -> DeepLinkDay? {
         guard url.scheme == "todos",
-              url.host == "day",
+              (url.host == "day" || url.host == "day-overview"),
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let dateStr = components.queryItems?.first(where: { $0.name == "date" })?.value
         else {
