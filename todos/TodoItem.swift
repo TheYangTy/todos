@@ -48,8 +48,11 @@ struct TodoItem: Identifiable, Codable, Equatable {
     let id: UUID
     var title: String
     var isDone: Bool
-    /// 完成时间（用于“已完成”列表倒序/顺序排序）
-    var completedAt: Date?
+
+    // 关注 / Pin
+    var isPinned: Bool
+    var pinnedAt: Date?
+
     var dueDate: Date?
     var priority: Priority
     var listId: UUID
@@ -62,16 +65,15 @@ struct TodoItem: Identifiable, Codable, Equatable {
     // 地点
     var location: TodoLocation?
 
-    /// 🔑 重复任务的“基准日期”
-    /// 比如第一次设置为 1 月 7 日交房租，这里就是 1 月 7 日。
-    /// 不管这条任务是 7 号做，还是 10 号做，下一次都按「每月 7 号」来算。
+    // “每月固定某一天”用的基准日期（例如每月 7 号）
     var repeatBaseDate: Date?
 
     init(
         id: UUID = UUID(),
         title: String,
         isDone: Bool = false,
-        completedAt: Date? = nil,
+        isPinned: Bool = false,
+        pinnedAt: Date? = nil,
         dueDate: Date? = nil,
         priority: Priority = .medium,
         listId: UUID,
@@ -84,7 +86,8 @@ struct TodoItem: Identifiable, Codable, Equatable {
         self.id = id
         self.title = title
         self.isDone = isDone
-        self.completedAt = completedAt
+        self.isPinned = isPinned
+        self.pinnedAt = pinnedAt
         self.dueDate = dueDate
         self.priority = priority
         self.listId = listId

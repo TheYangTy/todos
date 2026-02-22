@@ -23,12 +23,9 @@ struct TodoRow: View {
     private var priorityDotColor: Color {
         let raw: String
         switch todo.priority {
-        case .high:
-            raw = priorityHighColorRaw
-        case .medium:
-            raw = priorityMediumColorRaw
-        case .low:
-            raw = priorityLowColorRaw
+        case .high:   raw = priorityHighColorRaw
+        case .medium: raw = priorityMediumColorRaw
+        case .low:    raw = priorityLowColorRaw
         }
         return PriorityColorOption(rawValue: raw)?.color ?? .orange
     }
@@ -70,12 +67,10 @@ struct TodoRow: View {
 
                 // 详情行：优先级圆点 + 清单名 + 截止日期（全部同一行）
                 HStack(spacing: 6) {
-                    // 优先级圆点（无文字）
                     Circle()
                         .fill(priorityDotColor)
                         .frame(width: 8, height: 8)
 
-                    // 清单名（不再显示“清单：”字眼）
                     Text(listName)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -94,15 +89,20 @@ struct TodoRow: View {
 
             Spacer()
 
+            // 右侧：关注标记（可选）
+            if todo.isPinned {
+                Image(systemName: "pin.fill")
+                    .foregroundStyle(.secondary)
+                    .imageScale(.small)
+            }
+
             // 右侧自定义箭头（唯一的箭头）
             Image(systemName: "chevron.right")
                 .foregroundStyle(.tertiary)
                 .imageScale(.small)
         }
-        .contentShape(Rectangle())  // 整行可点击
-        .onTapGesture {
-            onTapDetail()
-        }
+        .contentShape(Rectangle())
+        .onTapGesture { onTapDetail() }
     }
 }
 

@@ -126,12 +126,12 @@ struct TodaySummaryLockView: View {
     var body: some View {
         Group {
             if stats.total == 0 {
-                Text("今天暂无待办")
+                Text("今天无待办")
             } else {
                 if stats.overdue > 0 {
-                    Text("今 \(stats.total) 待办 · \(stats.overdue) 逾期")
+                    Text("\(stats.total) 待办 · \(stats.overdue) 逾期")
                 } else {
-                    Text("今 \(stats.total) 待办 · 完成 \(stats.done)")
+                    Text("\(stats.total) 待办")
                 }
             }
         }

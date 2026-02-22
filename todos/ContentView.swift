@@ -13,8 +13,8 @@ struct ContentView: View {
     @State private var newHasDueDate: Bool = false
     @State private var newPriority: TodoItem.Priority = .medium
     @State private var newRepeatRule: TodoItem.RepeatRule = .none
-    @State private var newHasReminder: Bool = false          // 新增
-    @State private var newReminderTime: Date = Date()        // 新增
+    @State private var newHasReminder: Bool = false
+    @State private var newReminderTime: Date = Date()
     @State private var newListId: UUID?
 
     @State private var searchText: String = ""
@@ -28,6 +28,8 @@ struct ContentView: View {
     // 详情页导航用：选中的 Todo
     @State private var selectedTodoID: UUID?
     @State private var isShowingDetail: Bool = false
+    
+    
 
     @AppStorage("sortOption") private var sortOptionRaw: String = SortOption.priority.rawValue
     @AppStorage("showCompleted") private var showCompleted: Bool = true
@@ -43,6 +45,19 @@ struct ContentView: View {
     @AppStorage("badgeMode") private var badgeModeRaw: String = BadgeMode.today.rawValue
     @AppStorage("badgeRangeStart") private var badgeRangeStartTime: Double = Date().timeIntervalSince1970
     @AppStorage("badgeRangeEnd") private var badgeRangeEndTime: Double = Date().timeIntervalSince1970
+
+    // ✅ 智能建议：记住你最近一次新建时的选择
+    @AppStorage("smart_lastListId") private var smartLastListIdRaw: String = ""
+    @AppStorage("smart_lastPriority") private var smartLastPriorityRaw: String = ""
+    @AppStorage("smart_lastRepeatRule") private var smartLastRepeatRuleRaw: String = ""
+    /// 仅记录“常用提醒时分”（minutesSinceMidnight），不强制开启提醒
+    @AppStorage("smart_lastReminderMinutes") private var smartLastReminderMinutes: Int = 9 * 60
+
+    // ✅ 关注 / Pin（不改 TodoItem 结构：用 UUID->时间戳 存 AppStorage）
+    @AppStorage("pinnedTodoMap") private var pinnedTodoMapRaw: String = ""
+
+    // ✅ 已完成时间（不改 TodoItem 结构：用 UUID->完成时间戳 存 AppStorage）
+    @AppStorage("completedTodoMap") private var completedTodoMapRaw: String = ""
 
     @EnvironmentObject var quickActions: QuickActionCenter
 
@@ -105,6 +120,20 @@ struct ContentView: View {
         Date(timeIntervalSince1970: badgeRangeEndTime)
     }
 
+    private var smartLastListId: UUID? {
+        UUID(uuidString: smartLastListIdRaw)
+    }
+
+    private var smartLastPriority: TodoItem.Priority? {
+        guard !smartLastPriorityRaw.isEmpty else { return nil }
+        return TodoItem.Priority(rawValue: smartLastPriorityRaw)
+    }
+
+    private var smartLastRepeatRule: TodoItem.RepeatRule? {
+        guard !smartLastRepeatRuleRaw.isEmpty else { return nil }
+        return TodoItem.RepeatRule(rawValue: smartLastRepeatRuleRaw)
+    }
+
     // MARK: - 初始化
 
     init() {
@@ -161,6 +190,56 @@ struct ContentView: View {
                     }
                 }
 
+                // ✅ 关注（Pin）—— 放在“新增”下面，待完成上面
+                if !pinnedIndices.isEmpty {
+                    Section {
+                        ForEach(pinnedIndices, id: \.self) { idx in
+                            let listName = nameForList(id: data.todos[idx].listId)
+
+                            TodoRow(
+                                todo: $data.todos[idx],
+                                listName: listName,
+                                lists: data.lists,
+                                onToggleDone: { toggleDone(at: idx) },
+                                onTapDetail: {
+                                    selectedTodoID = data.todos[idx].id
+                                    isShowingDetail = true
+                                }
+                            )
+                            .contextMenu {
+                                Button {
+                                    togglePinned(for: data.todos[idx].id)
+                                } label: {
+                                    Label("取消关注", systemImage: "pin.slash")
+                                }
+                            }
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                Button {
+                                    markDone(at: idx, done: true)
+                                } label: {
+                                    Label("完成", systemImage: "checkmark.circle")
+                                }
+                                .tint(.blue)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    moveToTrash(at: idx)
+                                } label: {
+                                    Label("删除", systemImage: "trash")
+                                }
+                            }
+                        }
+                    } header: {
+                        HStack {
+                            Text("关注")
+                            Spacer()
+                            Text("\(pinnedIndices.count) 项")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
                 // 待完成（带数量）
                 if !incompleteIndices.isEmpty {
                     Section {
@@ -171,14 +250,23 @@ struct ContentView: View {
                                 todo: $data.todos[idx],
                                 listName: listName,
                                 lists: data.lists,
-                                onToggleDone: {
-                                    toggleDone(at: idx)
-                                },
+                                onToggleDone: { toggleDone(at: idx) },
                                 onTapDetail: {
                                     selectedTodoID = data.todos[idx].id
                                     isShowingDetail = true
                                 }
                             )
+                            .contextMenu {
+                                Button {
+                                    togglePinned(for: data.todos[idx].id)
+                                } label: {
+                                    if isPinned(data.todos[idx].id) {
+                                        Label("取消关注", systemImage: "pin.slash")
+                                    } else {
+                                        Label("关注", systemImage: "pin")
+                                    }
+                                }
+                            }
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 Button {
                                     markDone(at: idx, done: true)
@@ -216,14 +304,23 @@ struct ContentView: View {
                                 todo: $data.todos[idx],
                                 listName: listName,
                                 lists: data.lists,
-                                onToggleDone: {
-                                    toggleDone(at: idx)
-                                },
+                                onToggleDone: { toggleDone(at: idx) },
                                 onTapDetail: {
                                     selectedTodoID = data.todos[idx].id
                                     isShowingDetail = true
                                 }
                             )
+                            .contextMenu {
+                                Button {
+                                    togglePinned(for: data.todos[idx].id)
+                                } label: {
+                                    if isPinned(data.todos[idx].id) {
+                                        Label("取消关注", systemImage: "pin.slash")
+                                    } else {
+                                        Label("关注", systemImage: "pin")
+                                    }
+                                }
+                            }
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 Button {
                                     markDone(at: idx, done: false)
@@ -276,7 +373,6 @@ struct ContentView: View {
                     EditButton()
                 }
 
-                // 筛选按钮
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         isShowingFilterSheet = true
@@ -286,12 +382,11 @@ struct ContentView: View {
                     .accessibilityLabel("筛选与排序")
                 }
 
-                // 设置入口
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink {
                         SettingsView(
-                            lists: $data.lists,
-                            onListDeleted: { deletedListId in
+                            data: $data,
+                                onListDeleted: { deletedListId in
                                 if let firstId = data.lists.first?.id {
                                     for idx in data.todos.indices {
                                         if data.todos[idx].listId == deletedListId {
@@ -306,13 +401,8 @@ struct ContentView: View {
                     }
                 }
             }
-            .sheet(isPresented: $isPresentingAddSheet) {
-                addTodoSheet
-            }
-            .sheet(isPresented: $isShowingFilterSheet) {
-                filterSheet
-            }
-            // 详情页导航：通过选中的 ID 找 Binding
+            .sheet(isPresented: $isPresentingAddSheet) { addTodoSheet }
+            .sheet(isPresented: $isShowingFilterSheet) { filterSheet }
             .navigationDestination(isPresented: $isShowingDetail) {
                 if let id = selectedTodoID,
                    let binding = bindingForTodo(id: id) {
@@ -325,35 +415,30 @@ struct ContentView: View {
             .onChange(of: data) { _ in
                 purgeOldTrashIfNeeded()
 
-                // 本地 & iCloud 存储
                 AppData.saveToLocal(data)
                 if enableICloudSync {
                     AppData.saveToICloud(data)
                 }
 
-                // 通知
                 let active = data.todos.filter { $0.deletedAt == nil }
-                NotificationManager.shared.syncNotifications(for: active,
-                                                             enabled: enableNotifications)
+                NotificationManager.shared.syncNotifications(for: active, enabled: enableNotifications)
 
-                // 角标（根据设置计算）
                 UIApplication.shared.applicationIconBadgeNumber = computeBadgeCount()
 
-                // Widget 刷新 —— 刷新所有桌面和锁屏小组件
                 let kinds = [
-                    "TodosWidget",              // 首页小组件
-                    "TodosOverviewWidget",      // 如果你有这个 kind（没有也没关系，多写一个不会崩）
-                    "TodaySummaryLockWidget",   // 锁屏顶部一句话
-                    "ProgressRingLockWidget",   // 锁屏圆环
-                    "MiniListLockWidget"        // 锁屏列表
+                    "TodosWidget",
+                    "TodosOverviewWidget",
+                    "TodaySummaryLockWidget",
+                    "ProgressRingLockWidget",
+                    "MiniListLockWidget"
                 ]
-
                 for kind in kinds {
                     WidgetCenter.shared.reloadTimelines(ofKind: kind)
                 }
             }
             .onAppear {
                 purgeOldTrashIfNeeded()
+                cleanupPinnedIfNeeded()
 
                 NotificationCenter.default.addObserver(
                     forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
@@ -399,22 +484,18 @@ struct ContentView: View {
                     Toggle("设置截止日期", isOn: $newHasDueDate)
                         .onChange(of: newHasDueDate) { hasDate in
                             if hasDate {
-                                // 默认给截止日当天 09:00 一个提醒时间
                                 let cal = Calendar.current
                                 var comps = cal.dateComponents([.year, .month, .day], from: newDueDate)
                                 comps.hour = 9
                                 comps.minute = 0
                                 newReminderTime = cal.date(from: comps) ?? newDueDate
                             } else {
-                                // 去掉截止日期时，同步关闭提醒
                                 newHasReminder = false
                             }
                         }
 
                     if newHasDueDate {
-                        DatePicker("日期",
-                                   selection: $newDueDate,
-                                   displayedComponents: .date)
+                        DatePicker("日期", selection: $newDueDate, displayedComponents: .date)
                     }
                 }
 
@@ -429,11 +510,7 @@ struct ContentView: View {
                         Toggle("开启提醒", isOn: $newHasReminder)
 
                         if newHasReminder {
-                            DatePicker(
-                                "提醒时间",
-                                selection: $newReminderTime,
-                                displayedComponents: .hourAndMinute
-                            )
+                            DatePicker("提醒时间", selection: $newReminderTime, displayedComponents: .hourAndMinute)
                         }
                     }
                 }
@@ -455,27 +532,20 @@ struct ContentView: View {
                 } header: {
                     Text("重复")
                 } footer: {
-                    Text("""
-                    重复任务完成后自动创建下一次任务。
-                    """)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    Text("重复任务完成后自动创建下一次任务。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("新增事项")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
-                        isPresentingAddSheet = false
-                    }
+                    Button("取消") { isPresentingAddSheet = false }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") {
-                        addTodo()
-                    }
-                    .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty
-                              || data.lists.isEmpty)
+                    Button("完成") { addTodo() }
+                        .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty || data.lists.isEmpty)
                 }
             }
         }
@@ -502,14 +572,8 @@ struct ContentView: View {
                     }
 
                     if dateFilter == .range {
-                        DatePicker("开始日期",
-                                   selection: $customStartDate,
-                                   displayedComponents: .date)
-
-                        DatePicker("结束日期",
-                                   selection: $customEndDate,
-                                   in: customStartDate...,
-                                   displayedComponents: .date)
+                        DatePicker("开始日期", selection: $customStartDate, displayedComponents: .date)
+                        DatePicker("结束日期", selection: $customEndDate, in: customStartDate..., displayedComponents: .date)
                     }
                 }
             }
@@ -517,14 +581,12 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") {
-                        isShowingFilterSheet = false
-                    }
+                    Button("关闭") { isShowingFilterSheet = false }
                 }
             }
         }
     }
-    
+
     // MARK: - 轻微震动反馈（Haptics）
 
     private func softImpact() {
@@ -571,22 +633,24 @@ struct ContentView: View {
     }
 
     private func orderedIndices(completed: Bool) -> [Int] {
-        let base = data.todos.indices.filter {
-            data.todos[$0].deletedAt == nil &&
-            data.todos[$0].isDone == completed &&
-            matchesSearch(data.todos[$0]) &&
-            matchesListFilter(data.todos[$0]) &&
-            matchesDateFilter(data.todos[$0])
+        let base: [Int] = data.todos.indices.filter { idx in
+            let t = data.todos[idx]
+            return t.deletedAt == nil &&
+                   t.isDone == completed &&
+                   matchesSearch(t) &&
+                   matchesListFilter(t) &&
+                   matchesDateFilter(t)
         }
 
-        return base.sorted { lhs, rhs in
+        let completedMap = loadCompletedMap()
+
+        return base.sorted { (lhs: Int, rhs: Int) in
             let a = data.todos[lhs]
             let b = data.todos[rhs]
 
-            // ✅ 已完成列表：按完成时间排序（默认倒序），点击标题可切换顺/倒序
             if completed {
-                let ta = a.completedAt ?? a.dueDate ?? Date.distantPast
-                let tb = b.completedAt ?? b.dueDate ?? Date.distantPast
+                let ta = completionDate(for: a.id, map: completedMap) ?? a.dueDate ?? Date.distantPast
+                let tb = completionDate(for: b.id, map: completedMap) ?? b.dueDate ?? Date.distantPast
                 if ta != tb {
                     return completedSortDescending ? (ta > tb) : (ta < tb)
                 }
@@ -633,12 +697,59 @@ struct ContentView: View {
         }
     }
 
+    // ✅ 关注：普通列表里不重复
+    private var pinnedIDSet: Set<String> {
+        Set(loadPinnedMap().keys)
+    }
+
     private var incompleteIndices: [Int] {
-        orderedIndices(completed: false)
+        orderedIndices(completed: false).filter { !pinnedIDSet.contains(data.todos[$0].id.uuidString) }
     }
 
     private var completedIndices: [Int] {
         orderedIndices(completed: true)
+    }
+
+    // ✅ 关注列表：仅未完成、未删除；按 pinned 时间倒序
+    private var pinnedIndices: [Int] {
+        let map = loadPinnedMap()
+
+        let base = data.todos.indices.filter { idx in
+            let t = data.todos[idx]
+            guard t.deletedAt == nil, !t.isDone else { return false }
+            guard map[t.id.uuidString] != nil else { return false }
+            return matchesSearch(t) && matchesListFilter(t) && matchesDateFilter(t)
+        }
+
+        return base.sorted { lhs, rhs in
+            let a = data.todos[lhs]
+            let b = data.todos[rhs]
+            let ta = map[a.id.uuidString] ?? 0
+            let tb = map[b.id.uuidString] ?? 0
+            if ta != tb { return ta > tb }
+
+            switch sortOption {
+            case .priority:
+                let order: [TodoItem.Priority: Int] = [.high: 0, .medium: 1, .low: 2]
+                let pa = order[a.priority] ?? 1
+                let pb = order[b.priority] ?? 1
+                if pa != pb { return pa < pb }
+                return a.title < b.title
+            case .dueDate:
+                switch (a.dueDate, b.dueDate) {
+                case let (da?, db?):
+                    if da != db { return da < db }
+                case (nil, .some):
+                    return false
+                case (.some, nil):
+                    return true
+                default: break
+                }
+                return a.title < b.title
+            case .title:
+                return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
+            }
+        }
     }
 
     private var todayStats: (total: Int, done: Int) {
@@ -649,7 +760,7 @@ struct ContentView: View {
         let done = allToday.filter { $0.isDone }.count
         return (total: allToday.count, done: done)
     }
-    
+
     private var overdueCount: Int {
         let today = Calendar.current.startOfDay(for: Date())
         return data.todos.filter { todo in
@@ -664,19 +775,16 @@ struct ContentView: View {
     // MARK: - 角标统计
 
     private func computeBadgeCount() -> Int {
-        // 未删除且未完成的任务
         let active = data.todos.filter { $0.deletedAt == nil && !$0.isDone }
 
         switch badgeMode {
         case .all:
             return active.count
-
         case .today:
             return active.filter { todo in
                 guard let due = todo.dueDate else { return false }
                 return Calendar.current.isDateInToday(due)
             }.count
-
         case .range:
             let cal = Calendar.current
             let startDay = cal.startOfDay(for: badgeRangeStartDate)
@@ -693,9 +801,7 @@ struct ContentView: View {
     // MARK: - Binding 辅助
 
     private func bindingForTodo(id: UUID) -> Binding<TodoItem>? {
-        guard let index = data.todos.firstIndex(where: { $0.id == id }) else {
-            return nil
-        }
+        guard let index = data.todos.firstIndex(where: { $0.id == id }) else { return nil }
         return $data.todos[index]
     }
 
@@ -705,22 +811,41 @@ struct ContentView: View {
         data.lists.first(where: { $0.id == id })?.name ?? "未知清单"
     }
 
+    // ✅ 智能建议：新建时预填（不强制开启提醒）
     private func prepareForNewTodo() {
         newTitle = ""
         newHasDueDate = false
         newDueDate = Date()
-        newPriority = defaultPriority
-        newRepeatRule = .none
-        newHasReminder = false
-        newReminderTime = Date()
+
+        // 1) 优先级：最近一次 > 设置默认
+        newPriority = smartLastPriority ?? defaultPriority
+
+        // 2) 重复：最近一次（没有就 none）
+        newRepeatRule = smartLastRepeatRule ?? .none
+
+        // 3) 清单：如果当前筛选是某个清单，就用它；否则用“最近一次”或第一个
         newListId = {
             switch selectedFilter {
             case .all:
+                if let last = smartLastListId,
+                   data.lists.contains(where: { $0.id == last }) {
+                    return last
+                }
                 return data.lists.first?.id
             case .list(let id):
                 return id
             }
         }()
+
+        // 4) 提醒：默认关闭，但把常用时间预填进去（体验更快）
+        newHasReminder = false
+        let minutes = max(0, smartLastReminderMinutes)
+        let h = minutes / 60
+        let m = minutes % 60
+        var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        comps.hour = h
+        comps.minute = m
+        newReminderTime = Calendar.current.date(from: comps) ?? Date()
     }
 
     private func addTodo() {
@@ -730,11 +855,9 @@ struct ContentView: View {
 
         let due: Date? = newHasDueDate ? newDueDate : nil
 
-        // 先构造一个 item
         var item = TodoItem(
             title: trimmed,
             isDone: false,
-            completedAt: nil,
             dueDate: due,
             priority: newPriority,
             listId: listId,
@@ -750,14 +873,23 @@ struct ContentView: View {
             comps.hour = time.hour
             comps.minute = time.minute
             item.reminderTime = cal.date(from: comps)
+
+            // 记录常用提醒时间（不影响你下次是否开启提醒）
+            let mins = (time.hour ?? 9) * 60 + (time.minute ?? 0)
+            smartLastReminderMinutes = mins
         } else {
             item.reminderTime = nil
         }
 
-        // 🔑 如果设置了重复规则且有截止日期，那么把这一刻的 dueDate 作为「基准日期」
+        // 🔑 重复且有截止日期：记录基准日期
         if newRepeatRule != .none, let due = due {
             item.repeatBaseDate = due
         }
+
+        // ✅ 记录“最近一次新建选择”用于智能建议
+        smartLastListIdRaw = listId.uuidString
+        smartLastPriorityRaw = newPriority.rawValue
+        smartLastRepeatRuleRaw = newRepeatRule.rawValue
 
         data.todos.append(item)
         isPresentingAddSheet = false
@@ -772,9 +904,16 @@ struct ContentView: View {
         softImpact()
         let item = data.todos[index]
         data.todos[index].isDone = done
-        data.todos[index].completedAt = done ? Date() : nil
+        if done {
+            recordCompletion(for: item.id)
+        } else {
+            removeCompletion(for: item.id)
+        }
 
-        // 只有“标记为完成”并且有重复规则、且有截止日期时，才生成下一条
+        // ✅ 完成后自动取消关注（更符合“关注=待做重点”）
+        if done { unpinIfNeeded(for: item.id) }
+
+        // 只有“完成”并且有重复规则、且有截止日期时，才生成下一条
         guard done,
               item.repeatRule != .none,
               let due = item.dueDate else { return }
@@ -782,13 +921,9 @@ struct ContentView: View {
         let baseDate = item.repeatBaseDate ?? due
 
         if let days = Calendar.current.dateComponents([.day], from: due, to: Date()).day,
-           days > 7 {
-            return
-        }
+           days > 7 { return }
 
-        guard let nextDue = nextDueDate(from: due, base: baseDate, rule: item.repeatRule) else {
-            return
-        }
+        guard let nextDue = nextDueDate(from: due, base: baseDate, rule: item.repeatRule) else { return }
 
         var nextReminder: Date? = nil
         if let currentReminder = item.reminderTime {
@@ -803,7 +938,6 @@ struct ContentView: View {
         let newItem = TodoItem(
             title: item.title,
             isDone: false,
-            completedAt: nil,
             dueDate: nextDue,
             priority: item.priority,
             listId: item.listId,
@@ -817,45 +951,34 @@ struct ContentView: View {
         data.todos.append(newItem)
     }
 
-    /// 根据当前这次的截止日 + 基准日期，算下一次的截止日
-    private func nextDueDate(from current: Date,
-                             base: Date,
-                             rule: TodoItem.RepeatRule) -> Date? {
+    private func nextDueDate(from current: Date, base: Date, rule: TodoItem.RepeatRule) -> Date? {
         let cal = Calendar.current
 
         switch rule {
         case .none:
             return nil
-
         case .daily:
             return cal.date(byAdding: .day, value: 1, to: current)
-
         case .weekly:
             return cal.date(byAdding: .day, value: 7, to: current)
-
         case .monthly:
             let baseDay = cal.component(.day, from: base)
-
-            guard let nextMonthDate = cal.date(byAdding: .month, value: 1, to: current) else {
-                return nil
-            }
-
+            guard let nextMonthDate = cal.date(byAdding: .month, value: 1, to: current) else { return nil }
             var comps = cal.dateComponents([.year, .month], from: nextMonthDate)
-
             if let range = cal.range(of: .day, in: .month, for: nextMonthDate) {
-                let maxDay = range.count
-                comps.day = min(baseDay, maxDay)
+                comps.day = min(baseDay, range.count)
             } else {
                 comps.day = baseDay
             }
-
             return cal.date(from: comps)
         }
     }
 
     private func moveToTrash(at index: Int) {
         mediumImpact()
+        let id = data.todos[index].id
         data.todos[index].deletedAt = Date()
+        unpinIfNeeded(for: id)
     }
 
     private func purgeOldTrashIfNeeded() {
@@ -871,6 +994,9 @@ struct ContentView: View {
             }
             return false
         }
+
+        cleanupPinnedIfNeeded()
+        cleanupCompletedIfNeeded()
     }
 
     private func handleQuickActionIfNeeded() {
@@ -881,5 +1007,99 @@ struct ContentView: View {
             isPresentingAddSheet = true
         }
         quickActions.lastAction = nil
+    }
+
+    // MARK: - 关注 / Pin 存储（UUIDString -> pinnedAtSeconds）
+
+    private func loadPinnedMap() -> [String: Double] {
+        guard !pinnedTodoMapRaw.isEmpty,
+              let data = pinnedTodoMapRaw.data(using: .utf8) else { return [:] }
+        return (try? JSONDecoder().decode([String: Double].self, from: data)) ?? [:]
+    }
+
+    private func savePinnedMap(_ map: [String: Double]) {
+        if let data = try? JSONEncoder().encode(map),
+           let str = String(data: data, encoding: .utf8) {
+            pinnedTodoMapRaw = str
+        } else {
+            pinnedTodoMapRaw = ""
+        }
+    }
+
+    private func isPinned(_ id: UUID) -> Bool {
+        loadPinnedMap()[id.uuidString] != nil
+    }
+
+    private func togglePinned(for id: UUID) {
+        softImpact()
+        var map = loadPinnedMap()
+        let key = id.uuidString
+        if map[key] != nil {
+            map.removeValue(forKey: key)
+        } else {
+            map[key] = Date().timeIntervalSince1970
+        }
+        savePinnedMap(map)
+    }
+
+    private func unpinIfNeeded(for id: UUID) {
+        var map = loadPinnedMap()
+        let key = id.uuidString
+        guard map[key] != nil else { return }
+        map.removeValue(forKey: key)
+        savePinnedMap(map)
+    }
+
+    private func cleanupPinnedIfNeeded() {
+        var map = loadPinnedMap()
+        guard !map.isEmpty else { return }
+        let valid = Set(data.todos.filter { $0.deletedAt == nil && !$0.isDone }.map { $0.id.uuidString })
+        map = map.filter { valid.contains($0.key) }
+        savePinnedMap(map)
+    }
+
+
+    // MARK: - 已完成时间存储（UUIDString -> completedAtSeconds）
+
+    private func loadCompletedMap() -> [String: Double] {
+        guard !completedTodoMapRaw.isEmpty,
+              let data = completedTodoMapRaw.data(using: .utf8) else { return [:] }
+        return (try? JSONDecoder().decode([String: Double].self, from: data)) ?? [:]
+    }
+
+    private func saveCompletedMap(_ map: [String: Double]) {
+        if let data = try? JSONEncoder().encode(map),
+           let str = String(data: data, encoding: .utf8) {
+            completedTodoMapRaw = str
+        } else {
+            completedTodoMapRaw = ""
+        }
+    }
+
+    private func completionDate(for id: UUID, map: [String: Double]) -> Date? {
+        guard let ts = map[id.uuidString] else { return nil }
+        return Date(timeIntervalSince1970: ts)
+    }
+
+    private func recordCompletion(for id: UUID) {
+        var map = loadCompletedMap()
+        map[id.uuidString] = Date().timeIntervalSince1970
+        saveCompletedMap(map)
+    }
+
+    private func removeCompletion(for id: UUID) {
+        var map = loadCompletedMap()
+        if map.removeValue(forKey: id.uuidString) != nil {
+            saveCompletedMap(map)
+        }
+    }
+
+    private func cleanupCompletedIfNeeded() {
+        var map = loadCompletedMap()
+        guard !map.isEmpty else { return }
+        // 只保留：存在于 todos 且未被删除 的条目（已完成/未完成都可能要保留；但删除后就清掉）
+        let valid = Set(data.todos.filter { $0.deletedAt == nil }.map { $0.id.uuidString })
+        map = map.filter { valid.contains($0.key) }
+        saveCompletedMap(map)
     }
 }

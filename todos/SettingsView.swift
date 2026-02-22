@@ -18,8 +18,9 @@ enum BadgeMode: String, CaseIterable, Identifiable {
 }
 
 struct SettingsView: View {
-    // 从 ContentView 传进来的清单列表
-    @Binding var lists: [TodoList]
+    // ✅ 从 ContentView 传入整份数据（用于手动 iCloud 备份/恢复）
+    @Binding var data: AppData
+
     // 清单被删除时回调，让外层（ContentView）去更新 todos 的 listId
     let onListDeleted: (UUID) -> Void
 
@@ -38,6 +39,13 @@ struct SettingsView: View {
     @AppStorage("priorityColorHigh")  private var priorityHighColorRaw: String  = PriorityColorOption.red.rawValue
     @AppStorage("priorityColorMedium") private var priorityMediumColorRaw: String = PriorityColorOption.orange.rawValue
     @AppStorage("priorityColorLow")   private var priorityLowColorRaw: String   = PriorityColorOption.green.rawValue
+
+    // ✅ 记录上次手动上传时间（便于用户确认“确实有备份”）
+    @AppStorage("icloudLastBackupTime") private var icloudLastBackupTime: Double = 0
+
+    // 弹窗
+    @State private var showRestoreConfirm = false
+    @State private var toastMessage: String? = nil
 
     private var defaultPriority: TodoItem.Priority {
         TodoItem.Priority(rawValue: defaultPriorityRaw) ?? .medium
@@ -59,6 +67,27 @@ struct SettingsView: View {
         Date(timeIntervalSince1970: badgeRangeEndTime)
     }
 
+    private var iCloudHasBackup: Bool {
+        NSUbiquitousKeyValueStore.default.data(forKey: AppData.storageKey) != nil
+    }
+
+    private var iCloudLastBackupText: String {
+        guard icloudLastBackupTime > 0 else { return "未上传" }
+        let date = Date(timeIntervalSince1970: icloudLastBackupTime)
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f.string(from: date)
+    }
+
+    // ✅ 把 lists 暴露为 Binding，方便复用你现有的 ManageListsView
+    private var listsBinding: Binding<[TodoList]> {
+        Binding(
+            get: { data.lists },
+            set: { data.lists = $0 }
+        )
+    }
+
     var body: some View {
         Form {
             // 显示相关
@@ -77,11 +106,11 @@ struct SettingsView: View {
                     }
                 }
             }
-            
-            // 数据与清单（⚠️ 这里用 NavigationLink 进入 ManageListsView）
+
+            // 数据与清单
             Section("数据与清单") {
                 NavigationLink {
-                    ManageListsView(lists: $lists) { deletedId in
+                    ManageListsView(lists: listsBinding) { deletedId in
                         onListDeleted(deletedId)
                     }
                 } label: {
@@ -105,9 +134,9 @@ struct SettingsView: View {
                         }
                     }
             }
-            
+
             // 优先级颜色
-            Section("优先级颜色") {
+            Section("优先级") {
                 Picker("高优先级", selection: $priorityHighColorRaw) {
                     ForEach(PriorityColorOption.allCases) { option in
                         HStack {
@@ -178,29 +207,92 @@ struct SettingsView: View {
                     )
                 }
 
-                Text("角标只统计未删除且未完成的任务数量；“今天”和“时间范围”只包含设置了截止日期的任务。")
+                Text("角标只统计未删除且未完成的任务数量；\"今天\"和\"时间范围\"只包含设置了截止日期的任务。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.top, 4)
             }
 
-            
-
             // iCloud
             Section("iCloud") {
                 Toggle("使用 iCloud 同步数据", isOn: $enableICloudSync)
-            }
 
-            
+                HStack {
+                    Text("iCloud 备份")
+                    Spacer()
+                    Text(iCloudHasBackup ? "已存在" : "暂无")
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    Text("上次手动上传")
+                    Spacer()
+                    Text(iCloudLastBackupText)
+                        .foregroundStyle(.secondary)
+                }
+
+                Button {
+                    AppData.saveToICloud(data)
+                    icloudLastBackupTime = Date().timeIntervalSince1970
+                    toastMessage = "已上传到 iCloud"
+                } label: {
+                    Label("上传到 iCloud", systemImage: "icloud.and.arrow.up")
+                }
+
+                Button {
+                    showRestoreConfirm = true
+                } label: {
+                    Label("从 iCloud 恢复", systemImage: "icloud.and.arrow.down")
+                }
+                .disabled(!iCloudHasBackup)
+                .confirmationDialog(
+                    "从 iCloud 恢复将覆盖本地数据，是否继续？",
+                    isPresented: $showRestoreConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("恢复", role: .destructive) {
+                        if let cloud = AppData.loadFromICloud() {
+                            data = cloud
+                            toastMessage = "已从 iCloud 恢复"
+                        } else {
+                            toastMessage = "iCloud 暂无可恢复数据"
+                        }
+                    }
+                    Button("取消", role: .cancel) {}
+                }
+
+                Text("提示：iCloud 同步是\"最终一致\"，不会保证立刻生效。开发阶段建议手动上传一次再验证。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
 
             // 关于
             Section("关于") {
                 Text("todos · 个人待办应用")
                 Text("@marcus")
                     .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) {
+            if let msg = toastMessage {
+                Text(msg)
+                    .font(.footnote)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                            withAnimation { toastMessage = nil }
+                        }
+                    }
+            }
+        }
     }
 }
